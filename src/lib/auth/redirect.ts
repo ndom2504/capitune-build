@@ -21,3 +21,10 @@ export function oauthCallbackUrl(request: Request, next = "/dashboard"): string 
   const nextPath = safeNextPath(next);
   return `${appOrigin(request)}/auth/callback?next=${encodeURIComponent(nextPath)}`;
 }
+
+export function isGoogleProviderAuthCode(code: string): boolean {
+  return code.startsWith("4/");
+}
+
+export const GOOGLE_REDIRECT_MISCONFIGURED =
+  "L’URI de redirection Google Cloud est incorrecte. Dans le client OAuth Web, autorise uniquement https://nvykactdasdegjhbfwpm.supabase.co/auth/v1/callback — pas capitune.com.";

@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE } from "@/lib/constants";
 import { isAuthPath, isProtectedPath } from "@/lib/auth/paths";
+import { GOOGLE_REDIRECT_MISCONFIGURED, isGoogleProviderAuthCode } from "@/lib/auth/redirect";
 import { getSupabasePublicConfig, isSupabaseEnabled } from "@/lib/supabase/config";
 
 function copyCookies(from: NextResponse, to: NextResponse): NextResponse {
@@ -41,7 +42,16 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  if (pathname !== "/auth/callback" && request.nextUrl.searchParams.has("code")) {
+  const inboundCode = request.nextUrl.searchParams.get("code");
+  if (inboundCode && isGoogleProviderAuthCode(inboundCode)) {
+    const login = request.nextUrl.clone();
+    login.pathname = "/login";
+    login.search = "";
+    login.searchParams.set("error", GOOGLE_REDIRECT_MISCONFIGURED);
+    return copyCookies(response, NextResponse.redirect(login));
+  }
+
+  if (pathname !== "/auth/callback" && inboundCode) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/callback";
     if (!url.searchParams.get("next")) {

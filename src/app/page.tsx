@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Brand } from "@/components/brand";
+import { LogoutButton } from "@/components/logout-button";
+import { getCurrentUser } from "@/lib/auth/server";
+import { isGoogleProviderAuthCode } from "@/lib/auth/redirect";
 import { t } from "@/lib/i18n/messages";
 
 export default async function HomePage({
@@ -9,7 +12,7 @@ export default async function HomePage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  if (typeof params.code === "string" && params.code) {
+  if (typeof params.code === "string" && params.code && !isGoogleProviderAuthCode(params.code)) {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {
       if (typeof value === "string") query.set(key, value);
@@ -17,17 +20,32 @@ export default async function HomePage({
     if (!query.get("next")) query.set("next", "/dashboard");
     redirect(`/auth/callback?${query.toString()}`);
   }
+
+  const user = await getCurrentUser();
+
   return (
     <div className="min-h-screen">
       <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
-        <Brand />
-        <nav className="flex gap-3 text-sm">
-          <Link href="/login" className="rounded-md px-3 py-2 hover:bg-card">
-            {t("login")}
-          </Link>
-          <Link href="/signup" className="rounded-md bg-accent px-3 py-2 text-white">
-            {t("start")}
-          </Link>
+        <Brand href={user ? "/dashboard" : "/"} />
+        <nav className="flex items-center gap-3 text-sm">
+          {user ? (
+            <>
+              <span className="hidden text-muted sm:inline">{user.email}</span>
+              <Link href="/dashboard" className="rounded-md bg-accent px-3 py-2 text-white">
+                {t("dashboard")}
+              </Link>
+              <LogoutButton />
+            </>
+          ) : (
+            <>
+              <Link href="/login" className="rounded-md px-3 py-2 hover:bg-card">
+                {t("login")}
+              </Link>
+              <Link href="/signup" className="rounded-md bg-accent px-3 py-2 text-white">
+                {t("start")}
+              </Link>
+            </>
+          )}
         </nav>
       </header>
       <main className="mx-auto max-w-6xl px-6 pb-20 pt-10">
@@ -37,12 +55,20 @@ export default async function HomePage({
         </h1>
         <p className="mt-6 max-w-xl text-lg text-muted">{t("landingLead")}</p>
         <div className="mt-8 flex flex-wrap gap-3">
-          <Link href="/signup" className="rounded-md bg-accent px-5 py-3 text-white">
-            {t("start")}
-          </Link>
-          <Link href="/login" className="rounded-md border bg-card px-5 py-3">
-            {t("login")}
-          </Link>
+          {user ? (
+            <Link href="/dashboard" className="rounded-md bg-accent px-5 py-3 text-white">
+              {t("dashboard")}
+            </Link>
+          ) : (
+            <>
+              <Link href="/signup" className="rounded-md bg-accent px-5 py-3 text-white">
+                {t("start")}
+              </Link>
+              <Link href="/login" className="rounded-md border bg-card px-5 py-3">
+                {t("login")}
+              </Link>
+            </>
+          )}
         </div>
         <section className="mt-20 grid gap-6 sm:grid-cols-3">
           {[t("step1"), t("step2"), t("step3")].map((step, index) => (

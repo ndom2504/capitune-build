@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { safeNextPath } from "@/lib/auth/redirect";
+import {
+  GOOGLE_REDIRECT_MISCONFIGURED,
+  isGoogleProviderAuthCode,
+  safeNextPath,
+} from "@/lib/auth/redirect";
 import { seedDemoProject } from "@/lib/projects/seed";
 import { getRepository } from "@/lib/store";
 import { createSupabaseRouteClient } from "@/lib/supabase/route-client";
@@ -27,12 +31,23 @@ export async function GET(request: Request) {
     return NextResponse.redirect(login);
   }
 
+  if (isGoogleProviderAuthCode(code)) {
+    const login = new URL("/login", url.origin);
+    login.searchParams.set("error", GOOGLE_REDIRECT_MISCONFIGURED);
+    return NextResponse.redirect(login);
+  }
+
   const redirect = NextResponse.redirect(new URL(next === "/" ? "/dashboard" : next, url.origin));
   const supabase = createSupabaseRouteClient(request, redirect);
   const { error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) {
     const login = new URL("/login", url.origin);
-    login.searchParams.set("error", error.message);
+    login.searchParams.set(
+      "error",
+      /Unable to exchange external code/i.test(error.message)
+        ? GOOGLE_REDIRECT_MISCONFIGURED
+        : error.message,
+    );
     return NextResponse.redirect(login);
   }
 
