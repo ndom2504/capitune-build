@@ -7,17 +7,26 @@ import { getRepository } from "@/lib/store";
 
 export default async function WorkspacePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ projectId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await getCurrentUser();
   if (!user) {
     redirect("/login");
   }
   const { projectId } = await params;
+  const query = await searchParams;
   try {
     const bundle = await (await getRepository()).getProject(user.id, projectId);
-    return <WorkspaceClient initial={bundle} demoMode={isDemoAI()} />;
+    return (
+      <WorkspaceClient
+        initial={bundle}
+        demoMode={isDemoAI()}
+        autoStart={query.start === "1"}
+      />
+    );
   } catch (error) {
     if (error instanceof OwnershipError) {
       redirect("/dashboard");

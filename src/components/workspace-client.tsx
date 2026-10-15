@@ -16,12 +16,16 @@ const frames = {
 type Device = keyof typeof frames;
 type Drawer = "none" | "files" | "publish";
 
+const EXAMPLE_KEYS = ["examplePrompt1", "examplePrompt2", "examplePrompt3"] as const;
+
 export function WorkspaceClient({
   initial,
   demoMode,
+  autoStart = false,
 }: {
   initial: ProjectBundle;
   demoMode: boolean;
+  autoStart?: boolean;
 }) {
   const router = useRouter();
   const [bundle, setBundle] = useState(initial);
@@ -38,19 +42,40 @@ export function WorkspaceClient({
   const [selectedFile, setSelectedFile] = useState<string | null>(
     initial.files.find((file) => file.path === "index.html")?.path ?? initial.files[0]?.path ?? null,
   );
+  const [previewPage, setPreviewPage] = useState(
+    initial.files.find((file) => file.path === "index.html")?.path ?? "index.html",
+  );
+  const [draft, setDraft] = useState(
+    () =>
+      initial.files.find((file) => file.path === "index.html")?.content ??
+      initial.files[0]?.content ??
+      "",
+  );
+  const [saving, setSaving] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
+  const autoStarted = useRef(false);
 
-  const previewSrc = `/api/preview/${bundle.project.id}/index.html?v=${previewKey}`;
+  const htmlPages = useMemo(
+    () => bundle.files.filter((file) => file.path.endsWith(".html")).map((file) => file.path),
+    [bundle.files],
+  );
   const selected = useMemo(
     () => bundle.files.find((file) => file.path === selectedFile) ?? null,
     [bundle.files, selectedFile],
   );
-  const hasPreview = bundle.files.some((file) => file.path === "index.html");
+  const hasPreview = htmlPages.length > 0;
+  const previewSrc = `/api/preview/${bundle.project.id}/${previewPage}?v=${previewKey}`;
+  const dirty = Boolean(selected && draft !== selected.content);
 
   useEffect(() => {
     const node = threadRef.current;
     if (node) node.scrollTop = node.scrollHeight;
   }, [bundle.messages, pending, lastPrompt, error]);
+
+  useEffect(() => {
+    const file = bundle.files.find((item) => item.path === selectedFile);
+    setDraft(file?.content ?? "");
+  }, [bundle.files, selectedFile]);
 
   async function refreshBundle() {
     const response = await fetch(`/api/projects/${bundle.project.id}`);
@@ -59,7 +84,14 @@ export function WorkspaceClient({
       setBundle(next);
       setPreviewKey((value) => value + 1);
       const html = next.files.find((file) => file.path === "index.html")?.path ?? next.files[0]?.path;
-      if (html) setSelectedFile(html);
+      if (html) {
+        setSelectedFile((current) =>
+          next.files.some((file) => file.path === current) ? current : html,
+        );
+        setPreviewPage((current) =>
+          next.files.some((file) => file.path === current) ? current : html,
+        );
+      }
     }
   }
 
@@ -84,6 +116,15 @@ export function WorkspaceClient({
     await refreshBundle();
     setTab("preview");
   }
+
+  useEffect(() => {
+    if (!autoStart || autoStarted.current || initial.messages.length > 0) return;
+    const text = initial.project.description.trim();
+    if (text.length < 3) return;
+    autoStarted.current = true;
+    void generate(text);
+    router.replace(`/workspace/${initial.project.id}`, { scroll: false });
+  }, [autoStart, initial.messages.length, initial.project.description, initial.project.id, router]);
 
   async function restore(versionId: string) {
     if (!confirm("Restaurer cette version ? Une nouvelle version de récupération sera créée.")) {
@@ -155,6 +196,32 @@ export function WorkspaceClient({
     setBundle((current) => ({ ...current, project: payload.project }));
   }
 
+  async function saveFile() {
+    if (!selectedFile || !dirty || saving) return;
+    setSaving(true);
+    setError(null);
+    const response = await fetch(`/api/projects/${bundle.project.id}/files`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: selectedFile, content: draft }),
+    });
+    const payload = await response.json();
+    setSaving(false);
+    if (!response.ok) {
+      setError(payload.error || "Enregistrement impossible.");
+      return;
+    }
+    await refreshBundle();
+  }
+
+  function openFile(path: string) {
+    setSelectedFile(path);
+    if (path.endsWith(".html")) {
+      setPreviewPage(path);
+      setTab("preview");
+    }
+  }
+
   async function copyPublicLink() {
     if (!publicPath) return;
     await navigator.clipboard.writeText(`${window.location.origin}${publicPath}`);
@@ -166,7 +233,23 @@ export function WorkspaceClient({
     <section className="flex h-full min-h-0 flex-col border-r bg-white">
       <div ref={threadRef} className="flex-1 space-y-4 overflow-y-auto p-4">
         {bundle.messages.length === 0 && !pending ? (
-          <p className="text-sm text-muted">{t("conversationEmpty")}</p>
+          <div className="space-y-4">
+            <p className="text-sm text-muted">{t("conversationEmpty")}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted">{t("examplesTitle")}</p>
+            <ul className="space-y-2">
+              {EXAMPLE_KEYS.map((key) => (
+                <li key={key}>
+                  <button
+                    type="button"
+                    onClick={() => void generate(t(key))}
+                    className="w-full rounded-2xl border bg-slate-50 px-3 py-2.5 text-left text-sm leading-relaxed hover:border-brand hover:bg-brand-soft"
+                  >
+                    {t(key)}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         ) : (
           bundle.messages.map((message) => (
             <Bubble
@@ -250,8 +333,24 @@ export function WorkspaceClient({
             <span className="h-2 w-2 rounded-full bg-amber-400" />
             <span className="h-2 w-2 rounded-full bg-emerald-400" />
             <span className="ml-2 truncate rounded-md bg-white px-2 py-0.5 text-[11px] text-muted">
-              {t("preview")} · {bundle.project.name}
+              {t("preview")} · {previewPage}
             </span>
+            {htmlPages.length > 1 ? (
+              <div className="ml-auto flex min-w-0 gap-1 overflow-x-auto">
+                {htmlPages.map((page) => (
+                  <button
+                    key={page}
+                    type="button"
+                    onClick={() => setPreviewPage(page)}
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] ${
+                      previewPage === page ? "bg-accent text-white" : "border bg-white"
+                    }`}
+                  >
+                    {page.replace(/\.html$/, "")}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
           <div className={`flex flex-1 justify-center overflow-auto bg-slate-50 ${pending ? "opacity-50" : ""}`}>
             {hasPreview ? (
@@ -432,7 +531,7 @@ export function WorkspaceClient({
                           <button
                             type="button"
                             className={file.path === selectedFile ? "font-semibold text-brand" : "text-muted"}
-                            onClick={() => setSelectedFile(file.path)}
+                            onClick={() => openFile(file.path)}
                           >
                             {file.path}
                           </button>
@@ -440,9 +539,22 @@ export function WorkspaceClient({
                       ))}
                     </ul>
                     {selected ? (
-                      <pre className="mt-3 max-h-64 overflow-auto rounded-2xl border bg-slate-50 p-3 text-xs">
-                        {selected.content.slice(0, 4000)}
-                      </pre>
+                      <>
+                        <textarea
+                          value={draft}
+                          onChange={(event) => setDraft(event.target.value)}
+                          className="mt-3 h-56 w-full resize-y rounded-2xl border bg-slate-50 p-3 font-mono text-xs"
+                          spellCheck={false}
+                        />
+                        <button
+                          type="button"
+                          disabled={!dirty || saving}
+                          onClick={() => void saveFile()}
+                          className="mt-2 w-full rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+                        >
+                          {saving ? "…" : dirty ? t("saveFile") : t("saved")}
+                        </button>
+                      </>
                     ) : null}
                   </div>
                 </div>

@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { demoProvider } from "@/lib/ai/demo-provider";
 import { runGeneration } from "@/lib/generation/run-generation";
+import { saveProjectFile } from "@/lib/generation/save-files";
 import { hashPassword } from "@/lib/auth/password";
 import { resetRateLimitForTests } from "@/lib/rate-limit";
 import { createLocalRepository } from "@/lib/store/local-repository";
@@ -57,6 +58,15 @@ describe("generation and ownership", () => {
     const restored = await repository.restoreVersion(owner.id, projectId, bundle.versions[0].id);
     expect(restored.versions.length).toBeGreaterThan(1);
     expect(restored.files.some((file) => file.path === "index.html")).toBe(true);
+
+    const saved = await saveProjectFile({
+      repository,
+      ownerId: owner.id,
+      projectId,
+      path: "index.html",
+      content: "<h1>Edit</h1>",
+    });
+    expect(saved.files.find((file) => file.path === "index.html")?.content).toBe("<h1>Edit</h1>");
   });
 
   it("blocks another user from reading a project", async () => {

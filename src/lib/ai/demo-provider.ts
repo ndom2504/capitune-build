@@ -12,6 +12,7 @@ function escapeHtml(value: string): string {
 function sampleSite(input: GenerateProjectInput): GenerationResult {
   const title = escapeHtml(input.projectName || "Projet Capitune");
   const instruction = escapeHtml(input.prompt);
+  const nav = `<nav class="nav"><a href="index.html">Accueil</a><a href="contact.html">Contact</a></nav>`;
   const html = `<!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -21,6 +22,7 @@ function sampleSite(input: GenerateProjectInput): GenerationResult {
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  ${nav}
   <header class="hero">
     <p class="eyebrow">Projet généré par Capitune</p>
     <h1>${title}</h1>
@@ -49,6 +51,31 @@ function sampleSite(input: GenerateProjectInput): GenerationResult {
 </html>
 `;
 
+  const contact = `<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Contact — ${title}</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  ${nav}
+  <header class="hero">
+    <p class="eyebrow">Contact</p>
+    <h1>Écrivons-nous</h1>
+    <p class="lead">Page d’exemple pour parcourir le site dans l’aperçu Capitune.</p>
+  </header>
+  <main>
+    <section>
+      <h2>Coordonnées</h2>
+      <p>contact@${escapeHtml((input.projectName || "projet").toLowerCase().replaceAll(" ", ""))}.example</p>
+    </section>
+  </main>
+</body>
+</html>
+`;
+
   const css = `:root {
   --ink: #1c1917;
   --muted: #57534e;
@@ -64,6 +91,8 @@ body {
   background: var(--paper);
   color: var(--ink);
 }
+.nav { display: flex; gap: 1rem; max-width: 880px; margin: 0 auto; padding: 1rem 1.5rem; }
+.nav a { color: var(--accent); text-decoration: none; }
 .hero, main, footer { max-width: 880px; margin: 0 auto; padding: 2.5rem 1.5rem; }
 .eyebrow { letter-spacing: 0.16em; text-transform: uppercase; font-size: 0.72rem; color: var(--accent); }
 h1 { font-size: clamp(2rem, 5vw, 3.4rem); line-height: 1.1; margin: 0.4rem 0 1rem; }
@@ -90,6 +119,7 @@ Mode démonstration: sortie déterministe sans appel à un modèle IA.
     summary: `Projet d’exemple généré pour « ${input.projectName} ». Mode démonstration.`,
     files: [
       { path: "index.html", content: html },
+      { path: "contact.html", content: contact },
       { path: "styles.css", content: css },
       { path: "README.md", content: readme },
     ],

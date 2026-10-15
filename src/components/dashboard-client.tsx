@@ -35,7 +35,8 @@ export function DashboardClient({ initialProjects }: { initialProjects: Project[
     }
     setName("");
     setDescription("");
-    router.push(`/workspace/${payload.project.id}`);
+    const start = description.trim().length >= 3 ? "?start=1" : "";
+    router.push(`/workspace/${payload.project.id}${start}`);
   }
 
   async function remove(id: string) {
@@ -66,7 +67,7 @@ export function DashboardClient({ initialProjects }: { initialProjects: Project[
       <form onSubmit={createProject} className="rounded-3xl border bg-white p-6 shadow-[0_16px_40px_-28px_rgba(15,23,42,0.35)]">
         <h2 className="text-lg font-bold">{t("newProject")}</h2>
         <p className="mt-1 text-sm text-muted">{t("newProjectHint")}</p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="mt-4 grid gap-3">
           <input
             required
             placeholder={t("projectName")}
@@ -74,10 +75,11 @@ export function DashboardClient({ initialProjects }: { initialProjects: Project[
             onChange={(event) => setName(event.target.value)}
             className="rounded-xl border bg-background px-3 py-2.5"
           />
-          <input
+          <textarea
             placeholder={t("projectDescription")}
             value={description}
             onChange={(event) => setDescription(event.target.value)}
+            rows={3}
             className="rounded-xl border bg-background px-3 py-2.5"
           />
         </div>
