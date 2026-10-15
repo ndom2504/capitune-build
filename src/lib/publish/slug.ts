@@ -1,5 +1,3 @@
-import { randomBytes } from "node:crypto";
-
 export const PUBLISH_SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const PUBLISH_SLUG_MIN = 3;
 export const PUBLISH_SLUG_MAX = 48;
@@ -49,7 +47,9 @@ export function slugify(input: string): string {
 }
 
 export function randomSlugSuffix(): string {
-  return randomBytes(3).toString("hex").slice(0, 4);
+  const bytes = new Uint8Array(3);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("").slice(0, 4);
 }
 
 export function nextSlugCandidate(base: string, attempt: number): string {
