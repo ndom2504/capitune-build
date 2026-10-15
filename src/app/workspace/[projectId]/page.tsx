@@ -2,6 +2,7 @@ import { redirect, notFound } from "next/navigation";
 import { WorkspaceClient } from "@/components/workspace-client";
 import { isDemoAI } from "@/lib/ai";
 import { getCurrentUser } from "@/lib/auth/server";
+import { encodePreviewToken } from "@/lib/preview/token";
 import { OwnershipError, NotFoundError } from "@/lib/store/repository";
 import { getRepository } from "@/lib/store";
 
@@ -25,6 +26,7 @@ export default async function WorkspacePage({
         initial={bundle}
         demoMode={isDemoAI()}
         autoStart={query.start === "1"}
+        previewToken={encodePreviewToken({ ownerId: user.id, projectId: bundle.project.id })}
       />
     );
   } catch (error) {

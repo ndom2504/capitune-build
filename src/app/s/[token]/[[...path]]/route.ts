@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { errorResponse } from "@/lib/http/guard";
 import { previewFileResponse, previewSecurityHeaders } from "@/lib/preview/headers";
 import {
-  isPublishToken,
+  isPublicSiteKey,
   localizePublishedHtml,
   needsPublishedIndexRedirect,
   publishedFilePath,
@@ -18,7 +18,7 @@ type Ctx = { params: Promise<{ token: string; path?: string[] }> };
 export async function GET(request: Request, context: Ctx) {
   try {
     const { token, path: segments = [] } = await context.params;
-    if (!isPublishToken(token)) {
+    if (!isPublicSiteKey(token)) {
       throw new NotFoundError("Site introuvable.");
     }
     if (needsPublishedIndexRedirect(segments)) {

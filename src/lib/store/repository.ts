@@ -32,6 +32,13 @@ export class PublishSchemaError extends Error {
   }
 }
 
+export class SlugTakenError extends Error {
+  constructor(message = "Cette adresse publique est déjà utilisée.") {
+    super(message);
+    this.name = "SlugTakenError";
+  }
+}
+
 export type CreateUserInput = {
   id?: string;
   email: string;
@@ -82,4 +89,8 @@ export interface Repository {
   ): Promise<Project>;
   getPublishedSite(token: string): Promise<{ name: string; files: ProjectFile[] }>;
   publishSchemaReady(): Promise<boolean>;
+  consumeGenerationLimit(
+    ownerId: string,
+  ): Promise<{ ok: true } | { ok: false; retryAfterMs: number }>;
+  quotaSchemaReady(): Promise<boolean>;
 }

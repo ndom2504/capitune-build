@@ -1,3 +1,5 @@
+import { previewFrameAncestors } from "@/lib/preview/origin";
+
 export function previewContentType(filePath: string): string {
   if (filePath.endsWith(".html")) return "text/html; charset=utf-8";
   if (filePath.endsWith(".css")) return "text/css; charset=utf-8";
@@ -8,9 +10,10 @@ export function previewContentType(filePath: string): string {
 }
 
 export function previewSecurityHeaders(): Record<string, string> {
+  const ancestors = previewFrameAncestors();
   return {
     "Content-Security-Policy":
-      "default-src 'none'; img-src data: https:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; font-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'",
+      `default-src 'none'; img-src data: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors ${ancestors}`,
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
     "Cache-Control": "no-store",

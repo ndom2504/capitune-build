@@ -23,15 +23,22 @@ import {
   type VersionFileRow,
   type VersionRow,
 } from "@/lib/store/mappers";
+import { GENERATION_RATE_LIMIT } from "@/lib/constants";
+import { consumeMemoryRateLimit } from "@/lib/rate-limit";
 import { isMissingPublishColumn } from "@/lib/publish/ready";
 import {
   NotFoundError,
   OwnershipError,
   PublishSchemaError,
+  SlugTakenError,
   type CreateUserInput,
   type Repository,
   type StoredUser,
 } from "@/lib/store/repository";
+
+function isUniqueViolation(error: { code?: string; message?: string }): boolean {
+  return error.code === "23505" || Boolean(error.message?.toLowerCase().includes("duplicate"));
+}
 
 function throwFromRpc(message: string): never {
   if (message.includes("FORBIDDEN")) {
@@ -295,6 +302,9 @@ export function createSupabaseRepository(admin: SupabaseClient): Repository {
         if (isMissingPublishColumn(error.message)) {
           throw new PublishSchemaError();
         }
+        if (isUniqueViolation(error)) {
+          throw new SlugTakenError();
+        }
         throw new Error(error.message);
       }
       return mapProject(data as ProjectRow);
@@ -332,6 +342,38 @@ export function createSupabaseRepository(admin: SupabaseClient): Repository {
       const { error } = await admin.from("projects").select("publish_token").limit(1);
       if (!error) return true;
       if (isMissingPublishColumn(error.message)) return false;
+      throw new Error(error.message);
+    },
+
+    async consumeGenerationLimit(ownerId) {
+      const { data, error } = await admin.rpc("consume_generation_quota", {
+        p_owner_id: ownerId,
+        p_max: GENERATION_RATE_LIMIT.max,
+        p_window_seconds: Math.round(GENERATION_RATE_LIMIT.windowMs / 1000),
+      });
+      if (error) {
+        if (
+          error.message.toLowerCase().includes("consume_generation_quota") ||
+          error.message.toLowerCase().includes("generation_quotas")
+        ) {
+          return consumeMemoryRateLimit(`gen:${ownerId}`);
+        }
+        throw new Error(error.message);
+      }
+      const payload = data as { ok?: boolean; retry_after_ms?: number };
+      if (payload?.ok) return { ok: true as const };
+      return { ok: false as const, retryAfterMs: Number(payload?.retry_after_ms) || GENERATION_RATE_LIMIT.windowMs };
+    },
+
+    async quotaSchemaReady() {
+      const { error } = await admin.from("generation_quotas").select("owner_id").limit(1);
+      if (!error) return true;
+      if (
+        error.message.toLowerCase().includes("generation_quotas") ||
+        error.message.toLowerCase().includes("does not exist")
+      ) {
+        return false;
+      }
       throw new Error(error.message);
     },
   };

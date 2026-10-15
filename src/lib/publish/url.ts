@@ -1,7 +1,14 @@
+import { isPublishSlug } from "@/lib/publish/slug";
+
 export const PUBLISH_TOKEN_RE = /^[A-Za-z0-9_-]{16,64}$/;
 
 export function isPublishToken(value: string): boolean {
   return PUBLISH_TOKEN_RE.test(value);
+}
+
+/** Slug lisible (jalon 15) ou ancien jeton imprévisible. */
+export function isPublicSiteKey(value: string): boolean {
+  return isPublishSlug(value) || isPublishToken(value);
 }
 
 export function publicSitePath(token: string): string {

@@ -1,6 +1,6 @@
 import { promptSchema, validateGenerationResult } from "@/lib/ai/schema";
 import type { AIProvider } from "@/lib/ai/provider";
-import { consumeRateLimit } from "@/lib/rate-limit";
+import { RateLimitError } from "@/lib/rate-limit";
 import type { Repository } from "@/lib/store/repository";
 
 export async function runGeneration(options: {
@@ -11,9 +11,9 @@ export async function runGeneration(options: {
   prompt: string;
 }) {
   const prompt = promptSchema.parse(options.prompt);
-  const limited = consumeRateLimit(`gen:${options.ownerId}`);
+  const limited = await options.repository.consumeGenerationLimit(options.ownerId);
   if (!limited.ok) {
-    throw new Error("Trop de générations. Réessayez dans quelques minutes.");
+    throw new RateLimitError(limited.retryAfterMs);
   }
 
   const bundle = await options.repository.getProject(options.ownerId, options.projectId);

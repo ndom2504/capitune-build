@@ -10,10 +10,12 @@ import type {
   ProjectVersion,
   VersionFile,
 } from "@/lib/domain";
+import { tickQuota } from "@/lib/rate-limit";
 import { emptyState, type StoreState } from "@/lib/store/memory-state";
 import {
   NotFoundError,
   OwnershipError,
+  SlugTakenError,
   type CreateUserInput,
   type Repository,
   type StoredUser,
@@ -311,7 +313,7 @@ export function createLocalRepository(filePath: string): Repository {
         if (token) {
           const clash = state.projects.find((item) => item.publishToken === token && item.id !== projectId);
           if (clash) {
-            throw new Error("Jeton de publication déjà utilisé.");
+            throw new SlugTakenError();
           }
         }
         project.publishToken = token;
@@ -333,6 +335,22 @@ export function createLocalRepository(filePath: string): Repository {
     },
 
     async publishSchemaReady() {
+      return true;
+    },
+
+    async consumeGenerationLimit(ownerId) {
+      return mutate((state) => {
+        if (!state.quotas) state.quotas = [];
+        const current = state.quotas.find((item) => item.ownerId === ownerId);
+        const ticked = tickQuota(current, ownerId);
+        state.quotas = state.quotas.filter((item) => item.ownerId !== ownerId);
+        state.quotas.push(ticked.next);
+        if (!ticked.ok) return { ok: false as const, retryAfterMs: ticked.retryAfterMs };
+        return { ok: true as const };
+      });
+    },
+
+    async quotaSchemaReady() {
       return true;
     },
   };

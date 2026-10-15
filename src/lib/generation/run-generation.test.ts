@@ -83,11 +83,29 @@ describe("generation and ownership", () => {
       projectId,
       prompt: "Une page d’accueil artisanale",
     });
-    const published = await repository.setPublishToken(owner.id, projectId, "public-share-token-ok");
-    expect(published.publishToken).toBe("public-share-token-ok");
-    const site = await repository.getPublishedSite("public-share-token-ok");
+    const published = await repository.setPublishToken(owner.id, projectId, "atelier-vitrine");
+    expect(published.publishToken).toBe("atelier-vitrine");
+    const site = await repository.getPublishedSite("atelier-vitrine");
     expect(site.files.some((file) => file.path === "index.html")).toBe(true);
     await expect(repository.getPublishedSite("missing-share-token-xx")).rejects.toThrow();
+
+    const otherProject = await repository.createProject({
+      ownerId: owner.id,
+      name: "Autre",
+      description: "Demo",
+    });
+    await expect(
+      repository.setPublishToken(owner.id, otherProject.project.id, "atelier-vitrine"),
+    ).rejects.toThrow();
+  });
+
+  it("persists generation quota per owner", async () => {
+    const { repository, owner } = await setup();
+    for (let i = 0; i < 8; i += 1) {
+      await expect(repository.consumeGenerationLimit(owner.id)).resolves.toEqual({ ok: true });
+    }
+    const blocked = await repository.consumeGenerationLimit(owner.id);
+    expect(blocked.ok).toBe(false);
   });
 
   it("rejects empty prompts", async () => {

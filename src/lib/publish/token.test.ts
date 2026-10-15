@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createPublishToken, isPublishToken, publicSitePath } from "@/lib/publish/token";
+import { createPublishToken, isPublicSiteKey, isPublishToken, publicSitePath } from "@/lib/publish/token";
 
 describe("publish token", () => {
   it("creates an unguessable url-safe token", () => {
@@ -11,6 +11,7 @@ describe("publish token", () => {
 
   it("rejects short or decorated values", () => {
     expect(isPublishToken("abc")).toBe(false);
+    expect(isPublicSiteKey("abc")).toBe(true);
     expect(isPublishToken("not a token!!!!")).toBe(false);
   });
 });

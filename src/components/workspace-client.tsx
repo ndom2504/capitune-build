@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { AppRail } from "@/components/app-rail";
 import type { ProjectBundle } from "@/lib/domain";
 import { t } from "@/lib/i18n/messages";
+import { previewPageUrl } from "@/lib/preview/url";
+import { isPublishSlug, slugify } from "@/lib/publish/slug";
 import { publicSitePath } from "@/lib/publish/url";
 
 const frames = {
@@ -22,10 +24,12 @@ export function WorkspaceClient({
   initial,
   demoMode,
   autoStart = false,
+  previewToken,
 }: {
   initial: ProjectBundle;
   demoMode: boolean;
   autoStart?: boolean;
+  previewToken: string;
 }) {
   const router = useRouter();
   const [bundle, setBundle] = useState(initial);
@@ -39,6 +43,11 @@ export function WorkspaceClient({
   const [drawer, setDrawer] = useState<Drawer>("none");
   const [copied, setCopied] = useState(false);
   const [publishBusy, setPublishBusy] = useState(false);
+  const [slug, setSlug] = useState(() => {
+    const current = initial.project.publishToken;
+    if (current && isPublishSlug(current)) return current;
+    return slugify(initial.project.name) || "site";
+  });
   const [selectedFile, setSelectedFile] = useState<string | null>(
     initial.files.find((file) => file.path === "index.html")?.path ?? initial.files[0]?.path ?? null,
   );
@@ -64,7 +73,7 @@ export function WorkspaceClient({
     [bundle.files, selectedFile],
   );
   const hasPreview = htmlPages.length > 0;
-  const previewSrc = `/api/preview/${bundle.project.id}/${previewPage}?v=${previewKey}`;
+  const previewSrc = previewPageUrl(previewToken, previewPage, previewKey);
   const dirty = Boolean(selected && draft !== selected.content);
 
   useEffect(() => {
@@ -172,7 +181,7 @@ export function WorkspaceClient({
     const response = await fetch(`/api/projects/${bundle.project.id}/publish`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rotate }),
+      body: JSON.stringify({ rotate, slug: slug.trim() || undefined }),
     });
     const payload = await response.json();
     setPublishBusy(false);
@@ -181,6 +190,9 @@ export function WorkspaceClient({
       return;
     }
     setBundle((current) => ({ ...current, project: payload.project }));
+    if (payload.project.publishToken && isPublishSlug(payload.project.publishToken)) {
+      setSlug(payload.project.publishToken);
+    }
   }
 
   async function unpublish() {
@@ -328,15 +340,17 @@ export function WorkspaceClient({
       </div>
       <div className="relative min-h-0 flex-1 p-3">
         <div className="flex h-full flex-col overflow-hidden rounded-2xl border bg-white shadow-sm">
-          <div className="flex items-center gap-1.5 border-b bg-slate-50 px-3 py-2">
-            <span className="h-2 w-2 rounded-full bg-red-400" />
-            <span className="h-2 w-2 rounded-full bg-amber-400" />
-            <span className="h-2 w-2 rounded-full bg-emerald-400" />
-            <span className="ml-2 truncate rounded-md bg-white px-2 py-0.5 text-[11px] text-muted">
-              {t("preview")} · {previewPage}
-            </span>
+          <div className="flex flex-col gap-2 border-b bg-slate-50 px-3 py-2 sm:flex-row sm:items-center">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-red-400" />
+              <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" />
+              <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
+              <span className="ml-2 truncate rounded-md bg-white px-2 py-0.5 text-[11px] text-muted">
+                {t("preview")} · {previewPage}
+              </span>
+            </div>
             {htmlPages.length > 1 ? (
-              <div className="ml-auto flex min-w-0 gap-1 overflow-x-auto">
+              <div className="flex gap-1 overflow-x-auto sm:ml-auto">
                 {htmlPages.map((page) => (
                   <button
                     key={page}
@@ -375,37 +389,66 @@ export function WorkspaceClient({
     <div className="flex h-screen overflow-hidden">
       <AppRail />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex flex-wrap items-center gap-3 border-b bg-white px-4 py-2.5">
-          <button type="button" className="text-sm text-muted" onClick={() => router.push("/dashboard")}>
-            ← {t("projects")}
-          </button>
-          <form onSubmit={rename} className="flex min-w-0 flex-1 items-center gap-2">
-            <input
-              name="name"
-              defaultValue={bundle.project.name}
-              className="min-w-0 flex-1 rounded-xl border-0 bg-transparent px-1 py-1 text-sm font-semibold outline-none focus:bg-slate-50"
-            />
-            <button type="submit" className="rounded-full border px-3 py-1 text-xs font-medium">
-              {t("rename")}
+        <header className="border-b bg-white px-3 py-2 sm:px-4">
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              className="shrink-0 text-sm text-muted"
+              onClick={() => router.push("/dashboard")}
+            >
+              ← {t("projects")}
             </button>
-          </form>
-          <button
-            type="button"
-            onClick={() => setDrawer(drawer === "files" ? "none" : "files")}
-            className="rounded-full border px-3 py-1.5 text-sm"
-          >
-            {t("files")}
-          </button>
-          <button
-            type="button"
-            onClick={() => setDrawer(drawer === "publish" ? "none" : "publish")}
-            className="rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-white"
-          >
-            {publicPath ? t("publishLive") : t("publish")}
-          </button>
-          {demoMode ? (
-            <span className="rounded-full bg-brand-soft px-3 py-1 text-xs font-medium text-brand">{t("demoMode")}</span>
-          ) : null}
+            <form onSubmit={rename} className="flex min-w-0 flex-1 items-center gap-2">
+              <input
+                name="name"
+                defaultValue={bundle.project.name}
+                className="min-w-0 w-full truncate rounded-xl border-0 bg-transparent px-1 py-1 text-sm font-semibold outline-none focus:bg-slate-50"
+              />
+              <button type="submit" className="hidden shrink-0 rounded-full border px-3 py-1 text-xs font-medium sm:inline-flex">
+                {t("rename")}
+              </button>
+            </form>
+            <div className="hidden shrink-0 items-center gap-2 lg:flex">
+              <button
+                type="button"
+                onClick={() => setDrawer(drawer === "files" ? "none" : "files")}
+                className="rounded-full border px-3 py-1.5 text-sm"
+              >
+                {t("files")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDrawer(drawer === "publish" ? "none" : "publish")}
+                className="rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-white"
+              >
+                {publicPath ? t("publishLive") : t("publish")}
+              </button>
+              {demoMode ? (
+                <span className="rounded-full bg-brand-soft px-3 py-1 text-xs font-medium text-brand">{t("demoMode")}</span>
+              ) : null}
+            </div>
+          </div>
+          <div className="mt-2 flex items-center gap-2 lg:hidden">
+            {demoMode ? (
+              <span className="shrink-0 rounded-full bg-brand-soft px-2 py-2 text-[11px] font-medium text-brand">
+                {t("demoMode")}
+              </span>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setDrawer(drawer === "files" ? "none" : "files")}
+              className="flex-1 rounded-full border px-3 py-2 text-sm"
+            >
+              {t("files")}
+            </button>
+            <button
+              type="button"
+              onClick={() => setDrawer(drawer === "publish" ? "none" : "publish")}
+              className="flex-1 rounded-full bg-accent px-3 py-2 text-sm font-semibold text-white"
+            >
+              {publicPath ? t("publishLive") : t("publish")}
+            </button>
+          </div>
         </header>
         {demoMode ? <p className="border-b bg-brand-soft px-4 py-2 text-xs sm:text-sm">{t("demoModeHint")}</p> : null}
 
@@ -442,6 +485,20 @@ export function WorkspaceClient({
               {drawer === "publish" ? (
                 <div className="space-y-3 p-4 text-sm">
                   <p className="text-muted">{t("publishHint")}</p>
+                  <label className="block text-xs font-medium text-muted" htmlFor="publish-slug">
+                    {t("publishSlug")}
+                  </label>
+                  <div className="flex items-center rounded-2xl border bg-slate-50 px-3 py-2 font-mono text-xs">
+                    <span className="shrink-0 text-muted">/s/</span>
+                    <input
+                      id="publish-slug"
+                      value={slug}
+                      onChange={(event) => setSlug(event.target.value.toLowerCase())}
+                      spellCheck={false}
+                      className="min-w-0 flex-1 bg-transparent outline-none"
+                    />
+                  </div>
+                  <p className="text-xs text-muted">{t("publishSlugHint")}</p>
                   {publicPath ? (
                     <>
                       <p className="break-all rounded-2xl bg-slate-50 px-3 py-2 font-mono text-xs">{publicPath}</p>

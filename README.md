@@ -2,7 +2,7 @@
 
 Capitune génère des sites web à partir d’instructions en langage naturel. Ce dépôt est le code de la **plateforme**, distinct des fichiers générés pour chaque projet utilisateur.
 
-## État du jalon 12
+## État du jalon 15
 
 Application Next.js avec :
 
@@ -10,8 +10,10 @@ Application Next.js avec :
 - Auth e-mail + Google via Supabase, persistance Postgres
 - génération **IA réelle** si `AI_API_KEY` est défini (OpenAI-compatible) ; sinon mode démonstration explicite
 - atelier : exemples cliquables, génération dès la description, **aperçu multi-pages**, **édition + sauvegarde** (nouvelle version)
-- **Publier** : lien public `/s/[jeton]/index.html` (index.html obligatoire, copie du lien au dashboard, 404 soignée) ; si Supabase : exécuter `0002_publish.sql` (bannière si la colonne manque)
+- **Publier** : lien public `/s/[slug]/index.html` (slug lisible, anciens jetons encore valides, index.html obligatoire, copie du lien, 404 soignée) ; si Supabase : exécuter `0002_publish.sql` (bannière si la colonne manque)
 - génération : consignes de design plus strictes ; vitrine démo alignée sur la charte Capitune
+- quota IA persisté par compte (8 / 10 min) ; `0003_quota.sql` sur Supabase (sinon repli mémoire + bannière)
+- aperçu **signé** `/p/[jeton]/…` (pas de session) ; origine dédiée optionnelle `NEXT_PUBLIC_PREVIEW_ORIGIN`
 - aperçu HTML/CSS sandboxé, versions récupérables, export ZIP
 - ownership vérifié côté serveur ; RLS activé sur le schéma Supabase
 
@@ -55,6 +57,8 @@ Voir `.env.example`.
 | `AI_API_KEY` | Optionnel. Absent = mode démo |
 | `AI_BASE_URL` / `AI_MODEL` | Fournisseur compatible OpenAI |
 | `DATA_STORE` | `local` (défaut) ou `supabase` |
+| `NEXT_PUBLIC_SITE_URL` | URL canonique de l’app (OAuth) |
+| `NEXT_PUBLIC_PREVIEW_ORIGIN` | Optionnel. Hôte d’aperçu isolé (ex. `https://preview.capitune.com`) |
 | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Projet Supabase (client + refresh de session) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Serveur uniquement, jamais `NEXT_PUBLIC_` |
 
@@ -66,7 +70,7 @@ Aucune clé secrète n’est préfixée `NEXT_PUBLIC_` sauf l’URL/anon Supabas
 - `src/lib/store` — persistance locale ou Supabase, ownership vérifié côté serveur
 - `src/lib/supabase` — clients Auth SSR (anon) et admin (service role)
 - `src/lib/generation` — validation, chemins, versions
-- `src/lib/preview` — en-têtes CSP de l’aperçu
+- `src/lib/preview` — jeton d’aperçu, origine, CSP
 - `docs/PREVIEW_SECURITY.md` — limites du bac à sable
 - `supabase/migrations` — schéma + RLS
 

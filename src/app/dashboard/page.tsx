@@ -16,10 +16,16 @@ export default async function DashboardPage() {
   const projects = await repository.listProjects(user.id);
   const env = getEnvStatus();
   let publishReady = true;
+  let quotaReady = true;
   try {
     publishReady = await repository.publishSchemaReady();
   } catch {
     publishReady = false;
+  }
+  try {
+    quotaReady = await repository.quotaSchemaReady();
+  } catch {
+    quotaReady = false;
   }
 
   return (
@@ -43,6 +49,9 @@ export default async function DashboardPage() {
           ) : null}
           {!publishReady ? (
             <p className="mt-3 max-w-2xl rounded-2xl bg-brand-soft px-4 py-3 text-sm">{t("publishSchemaMissing")}</p>
+          ) : null}
+          {env.mode === "supabase" && !quotaReady ? (
+            <p className="mt-3 max-w-2xl rounded-2xl bg-brand-soft px-4 py-3 text-sm">{t("quotaSchemaMissing")}</p>
           ) : null}
           <div className="mt-8">
             <DashboardClient initialProjects={projects} publishReady={publishReady} />

@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE } from "@/lib/constants";
 import { isAuthPath, isProtectedPath } from "@/lib/auth/paths";
 import { GOOGLE_REDIRECT_MISCONFIGURED, isGoogleProviderAuthCode } from "@/lib/auth/redirect";
+import { isIsolatedPreviewRequest } from "@/lib/preview/origin";
 import { getSupabasePublicConfig, isSupabaseEnabled } from "@/lib/supabase/config";
 
 function copyCookies(from: NextResponse, to: NextResponse): NextResponse {
@@ -13,6 +14,13 @@ function copyCookies(from: NextResponse, to: NextResponse): NextResponse {
 }
 
 export async function middleware(request: NextRequest) {
+  if (isIsolatedPreviewRequest(request.headers.get("host"))) {
+    if (!request.nextUrl.pathname.startsWith("/p/")) {
+      return new NextResponse(null, { status: 404 });
+    }
+    return NextResponse.next();
+  }
+
   let response = NextResponse.next({ request });
   let hasSession = Boolean(request.cookies.get(SESSION_COOKIE)?.value);
 
@@ -77,5 +85,7 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/dashboard/:path*", "/workspace/:path*", "/login", "/signup", "/auth/callback"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico).*)",
+  ],
 };
