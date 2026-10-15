@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
-import { Brand } from "@/components/brand";
+import { AppRail } from "@/components/app-rail";
 import { DashboardClient } from "@/components/dashboard-client";
-import { LogoutButton } from "@/components/logout-button";
 import { getCurrentUser } from "@/lib/auth/server";
 import { t } from "@/lib/i18n/messages";
 import { isDemoAI } from "@/lib/ai";
@@ -17,30 +16,29 @@ export default async function DashboardPage() {
   const env = getEnvStatus();
 
   return (
-    <div className="min-h-screen">
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-        <Brand href="/dashboard" />
-        <div className="flex items-center gap-2 text-sm">
-          <span className="hidden text-muted sm:inline">{user.email}</span>
-          <LogoutButton />
-        </div>
-      </header>
-      <main className="mx-auto max-w-6xl px-6 pb-16">
-        <h1 className="text-4xl font-extrabold tracking-tight">{t("dashboard")}</h1>
-        {isDemoAI() ? (
-          <p className="mt-3 max-w-2xl rounded-md bg-accent-soft px-3 py-2 text-sm">{t("demoModeHint")}</p>
-        ) : null}
-        <p className="mt-3 max-w-2xl text-sm text-muted">
-          {env.mode === "local"
-            ? t("persistenceLocal")
-            : env.ready
-              ? t("persistenceSupabase")
-              : `${t("persistenceSupabaseMissing")} ${env.missing.join(", ")}`}
-        </p>
-        <div className="mt-8">
-          <DashboardClient initialProjects={projects} />
-        </div>
-      </main>
+    <div className="flex min-h-screen">
+      <AppRail />
+      <div className="min-w-0 flex-1">
+        <header className="flex items-center justify-between px-6 py-5">
+          <p className="text-sm font-extrabold tracking-[0.16em]">CAPITUNE</p>
+          <span className="hidden text-sm text-muted sm:inline">{user.email}</span>
+        </header>
+        <main className="mx-auto max-w-5xl px-6 pb-16">
+          <h1 className="text-4xl font-extrabold tracking-tight">{t("projects")}</h1>
+          <p className="mt-2 text-muted">{t("projectsLead")}</p>
+          {isDemoAI() ? (
+            <p className="mt-4 max-w-2xl rounded-2xl bg-brand-soft px-4 py-3 text-sm">{t("demoModeHint")}</p>
+          ) : null}
+          {env.mode === "supabase" && !env.ready ? (
+            <p className="mt-3 max-w-2xl text-sm text-danger">
+              {t("persistenceSupabaseMissing")} {env.missing.join(", ")}
+            </p>
+          ) : null}
+          <div className="mt-8">
+            <DashboardClient initialProjects={projects} />
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

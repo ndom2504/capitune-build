@@ -64,6 +64,22 @@ describe("generation and ownership", () => {
     await expect(repository.getProject(other.id, projectId)).rejects.toBeInstanceOf(OwnershipError);
   });
 
+  it("serves published files by token without exposing another user's project", async () => {
+    const { repository, owner, projectId } = await setup();
+    await runGeneration({
+      repository,
+      provider: demoProvider,
+      ownerId: owner.id,
+      projectId,
+      prompt: "Une page d’accueil artisanale",
+    });
+    const published = await repository.setPublishToken(owner.id, projectId, "public-share-token-ok");
+    expect(published.publishToken).toBe("public-share-token-ok");
+    const site = await repository.getPublishedSite("public-share-token-ok");
+    expect(site.files.some((file) => file.path === "index.html")).toBe(true);
+    await expect(repository.getPublishedSite("missing-share-token-xx")).rejects.toThrow();
+  });
+
   it("rejects empty prompts", async () => {
     const { repository, owner, projectId } = await setup();
     await expect(

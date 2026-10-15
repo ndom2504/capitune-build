@@ -6,6 +6,7 @@ Réponds uniquement par un objet JSON : {"summary":"phrase courte en français",
 Règles :
 - Fichiers autorisés : html, css, js, md, svg, txt, json, ico.
 - Toujours inclure index.html. Préférer styles.css séparé.
+- Liens et assets relatifs (href="styles.css", pas href="/styles.css").
 - HTML autonome, sémantique, accessible, responsive. Pas de frameworks distants obligatoires.
 - Copie visible en français sauf si l’utilisateur demande une autre langue.
 - Itère à partir des fichiers existants : conserve ce qui fonctionne, applique l’instruction.

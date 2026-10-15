@@ -280,5 +280,52 @@ export function createSupabaseRepository(admin: SupabaseClient): Repository {
         files: bundleData.files,
       };
     },
+
+    async setPublishToken(ownerId, projectId, token) {
+      await requireOwnedProject(ownerId, projectId);
+      const { data, error } = await admin
+        .from("projects")
+        .update({ publish_token: token, updated_at: new Date().toISOString() })
+        .eq("id", projectId)
+        .select("*")
+        .single();
+      if (error) {
+        if (error.message.toLowerCase().includes("publish_token")) {
+          throw new Error(
+            "La colonne publish_token manque. Exécutez supabase/migrations/0002_publish.sql dans le SQL Editor.",
+          );
+        }
+        throw new Error(error.message);
+      }
+      return mapProject(data as ProjectRow);
+    },
+
+    async getPublishedSite(token) {
+      const { data: project, error } = await admin
+        .from("projects")
+        .select("*")
+        .eq("publish_token", token)
+        .maybeSingle();
+      if (error) {
+        if (error.message.toLowerCase().includes("publish_token")) {
+          throw new NotFoundError("Site introuvable.");
+        }
+        throw new Error(error.message);
+      }
+      if (!project) {
+        throw new NotFoundError("Site introuvable.");
+      }
+      const row = project as ProjectRow;
+      const { data: files, error: filesError } = await admin
+        .from("project_files")
+        .select("*")
+        .eq("project_id", row.id)
+        .order("path");
+      if (filesError) throw new Error(filesError.message);
+      return {
+        name: row.name,
+        files: ((files || []) as FileRow[]).map(mapFile),
+      };
+    },
   };
 }

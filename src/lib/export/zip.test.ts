@@ -10,6 +10,7 @@ describe("export", () => {
         ownerId: "usr_1",
         name: "Studio",
         description: "Test",
+        publishToken: null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       },

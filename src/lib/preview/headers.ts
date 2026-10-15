@@ -17,3 +17,12 @@ export function previewSecurityHeaders(): Record<string, string> {
     "X-Robots-Tag": "noindex",
   };
 }
+
+export function previewFileResponse(content: string, filePath: string): Response {
+  return new Response(content, {
+    headers: {
+      ...previewSecurityHeaders(),
+      "Content-Type": previewContentType(filePath),
+    },
+  });
+}

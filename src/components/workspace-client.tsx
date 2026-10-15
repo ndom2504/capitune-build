@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { AppRail } from "@/components/app-rail";
 import type { ProjectBundle } from "@/lib/domain";
 import { t } from "@/lib/i18n/messages";
+import { publicSitePath } from "@/lib/publish/url";
 
 const frames = {
   desktop: "100%",
@@ -12,6 +14,7 @@ const frames = {
 } as const;
 
 type Device = keyof typeof frames;
+type Drawer = "none" | "files" | "publish";
 
 export function WorkspaceClient({
   initial,
@@ -25,10 +28,13 @@ export function WorkspaceClient({
   const [prompt, setPrompt] = useState("");
   const [lastPrompt, setLastPrompt] = useState("");
   const [device, setDevice] = useState<Device>("desktop");
-  const [tab, setTab] = useState<"conversation" | "preview" | "files">("conversation");
+  const [tab, setTab] = useState<"conversation" | "preview">("conversation");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewKey, setPreviewKey] = useState(0);
+  const [drawer, setDrawer] = useState<Drawer>("none");
+  const [copied, setCopied] = useState(false);
+  const [publishBusy, setPublishBusy] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(
     initial.files.find((file) => file.path === "index.html")?.path ?? initial.files[0]?.path ?? null,
   );
@@ -39,6 +45,7 @@ export function WorkspaceClient({
     () => bundle.files.find((file) => file.path === selectedFile) ?? null,
     [bundle.files, selectedFile],
   );
+  const hasPreview = bundle.files.some((file) => file.path === "index.html");
 
   useEffect(() => {
     const node = threadRef.current;
@@ -94,6 +101,7 @@ export function WorkspaceClient({
     }
     await refreshBundle();
     setTab("preview");
+    setDrawer("none");
   }
 
   async function rename(event: FormEvent<HTMLFormElement>) {
@@ -115,45 +123,75 @@ export function WorkspaceClient({
     }
   }
 
+  const publicPath = bundle.project.publishToken ? publicSitePath(bundle.project.publishToken) : null;
+
+  async function publish(rotate = false) {
+    setPublishBusy(true);
+    setError(null);
+    const response = await fetch(`/api/projects/${bundle.project.id}/publish`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rotate }),
+    });
+    const payload = await response.json();
+    setPublishBusy(false);
+    if (!response.ok) {
+      setError(payload.error || "Publication impossible.");
+      return;
+    }
+    setBundle((current) => ({ ...current, project: payload.project }));
+  }
+
+  async function unpublish() {
+    setPublishBusy(true);
+    setError(null);
+    const response = await fetch(`/api/projects/${bundle.project.id}/publish`, { method: "DELETE" });
+    const payload = await response.json();
+    setPublishBusy(false);
+    if (!response.ok) {
+      setError(payload.error || "Retrait impossible.");
+      return;
+    }
+    setBundle((current) => ({ ...current, project: payload.project }));
+  }
+
+  async function copyPublicLink() {
+    if (!publicPath) return;
+    await navigator.clipboard.writeText(`${window.location.origin}${publicPath}`);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  }
+
   const conversationPanel = (
-    <section className="flex h-full min-h-0 flex-col border-r bg-card">
-      <div ref={threadRef} className="flex-1 space-y-3 overflow-y-auto p-4">
+    <section className="flex h-full min-h-0 flex-col border-r bg-white">
+      <div ref={threadRef} className="flex-1 space-y-4 overflow-y-auto p-4">
         {bundle.messages.length === 0 && !pending ? (
-          <p className="text-sm text-muted">Décrivez le site à générer pour commencer.</p>
+          <p className="text-sm text-muted">{t("conversationEmpty")}</p>
         ) : (
           bundle.messages.map((message) => (
-            <article
+            <Bubble
               key={message.id}
-              className={`rounded-lg px-3 py-2 text-sm ${
-                message.role === "user" ? "bg-accent-soft" : "border bg-background"
-              }`}
+              role={message.role === "user" ? "user" : "assistant"}
+              demo={message.demoMode}
             >
-              <p className="text-xs uppercase tracking-wide text-muted">
-                {message.role === "user" ? "Vous" : "Capitune"}
-                {message.demoMode ? " · démo" : ""}
-              </p>
-              <p className="mt-1 whitespace-pre-wrap">{message.content}</p>
-            </article>
+              {message.content}
+            </Bubble>
           ))
         )}
         {pending ? (
-          <article className="rounded-lg bg-accent-soft px-3 py-2 text-sm">
-            <p className="text-xs uppercase tracking-wide text-muted">Vous</p>
-            <p className="mt-1 whitespace-pre-wrap">{lastPrompt}</p>
-          </article>
-        ) : null}
-        {pending ? (
-          <article className="rounded-lg border bg-background px-3 py-2 text-sm">
-            <p className="text-xs uppercase tracking-wide text-muted">Capitune</p>
-            <p className="mt-1 text-muted">{t("generatingHint")}</p>
-          </article>
+          <>
+            <Bubble role="user">{lastPrompt}</Bubble>
+            <Bubble role="assistant">
+              <span className="text-muted">{t("generatingHint")}</span>
+            </Bubble>
+          </>
         ) : null}
       </div>
       {error ? (
         <div className="border-t px-4 py-3 text-sm text-danger">
           <p>{error}</p>
           {lastPrompt ? (
-            <button type="button" className="mt-2 underline" onClick={() => generate(lastPrompt)}>
+            <button type="button" className="mt-2 font-medium underline" onClick={() => generate(lastPrompt)}>
               {t("retry")}
             </button>
           ) : null}
@@ -166,152 +204,280 @@ export function WorkspaceClient({
           void generate(prompt);
         }}
       >
-        <textarea
-          value={prompt}
-          onChange={(event) => setPrompt(event.target.value)}
-          onKeyDown={onPromptKey}
-          placeholder={t("promptPlaceholder")}
-          rows={3}
-          disabled={pending}
-          className="w-full resize-none rounded-md border bg-background px-3 py-2 text-sm disabled:opacity-60"
-        />
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <p className="text-xs text-muted">{t("sendHint")}</p>
+        <div className="flex items-end gap-2 rounded-2xl border bg-slate-50 px-3 py-2">
+          <textarea
+            value={prompt}
+            onChange={(event) => setPrompt(event.target.value)}
+            onKeyDown={onPromptKey}
+            placeholder={bundle.messages.length ? t("iteratePlaceholder") : t("promptPlaceholder")}
+            rows={2}
+            disabled={pending}
+            className="min-h-[44px] flex-1 resize-none bg-transparent py-1.5 text-sm outline-none disabled:opacity-60"
+          />
           <button
             type="submit"
             disabled={pending || !prompt.trim()}
-            className="rounded-md bg-accent px-3 py-2 text-sm text-white disabled:opacity-60"
+            className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent text-white disabled:opacity-40"
+            aria-label={t("send")}
           >
-            {pending ? t("generating") : t("send")}
+            →
           </button>
         </div>
+        <p className="mt-2 text-xs text-muted">{pending ? t("generating") : t("sendHint")}</p>
       </form>
     </section>
   );
 
   const previewPanel = (
-    <section className="flex h-full min-h-0 flex-col bg-background">
-      <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2 text-sm">
+    <section className="flex h-full min-h-0 flex-col bg-slate-100">
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
         {(Object.keys(frames) as Device[]).map((item) => (
           <button
             key={item}
             type="button"
             onClick={() => setDevice(item)}
-            className={`rounded-md px-2 py-1 ${device === item ? "bg-accent text-white" : "border"}`}
+            className={`rounded-full px-3 py-1 ${device === item ? "bg-accent text-white" : "border bg-white"}`}
           >
             {t(item)}
           </button>
         ))}
         {pending ? <span className="ml-auto text-muted">{t("generating")}</span> : null}
       </div>
-      <div className="relative flex flex-1 justify-center overflow-auto p-3">
-        {bundle.files.some((file) => file.path === "index.html") ? (
-          <iframe
-            title="Aperçu du projet"
-            src={previewSrc}
-            sandbox="allow-scripts"
-            referrerPolicy="no-referrer"
-            className={`h-full min-h-[480px] rounded-md border bg-white ${pending ? "opacity-50" : ""}`}
-            style={{ width: frames[device], maxWidth: "100%" }}
-          />
-        ) : (
-          <p className="self-center text-sm text-muted">Aucun aperçu. Générez d’abord un projet.</p>
-        )}
+      <div className="relative min-h-0 flex-1 p-3">
+        <div className="flex h-full flex-col overflow-hidden rounded-2xl border bg-white shadow-sm">
+          <div className="flex items-center gap-1.5 border-b bg-slate-50 px-3 py-2">
+            <span className="h-2 w-2 rounded-full bg-red-400" />
+            <span className="h-2 w-2 rounded-full bg-amber-400" />
+            <span className="h-2 w-2 rounded-full bg-emerald-400" />
+            <span className="ml-2 truncate rounded-md bg-white px-2 py-0.5 text-[11px] text-muted">
+              {t("preview")} · {bundle.project.name}
+            </span>
+          </div>
+          <div className={`flex flex-1 justify-center overflow-auto bg-slate-50 ${pending ? "opacity-50" : ""}`}>
+            {hasPreview ? (
+              <iframe
+                title="Aperçu du projet"
+                src={previewSrc}
+                sandbox="allow-scripts"
+                referrerPolicy="no-referrer"
+                className="h-full min-h-[480px] bg-white"
+                style={{ width: frames[device], maxWidth: "100%" }}
+              />
+            ) : (
+              <p className="self-center p-6 text-sm text-muted">{t("previewEmpty")}</p>
+            )}
+          </div>
+        </div>
       </div>
     </section>
   );
 
-  const filesPanel = (
-    <aside className="flex h-full min-h-0 flex-col border-l bg-card">
-      <div className="border-b p-3">
-        <p className="text-sm font-medium">{t("versions")}</p>
-        <ul className="mt-2 max-h-32 space-y-1 overflow-auto text-sm">
-          {bundle.versions.length === 0 ? (
-            <li className="text-muted">Aucune version.</li>
-          ) : (
-            bundle.versions.map((version) => (
-              <li key={version.id} className="flex items-center justify-between gap-2">
-                <span className="truncate">{version.label}</span>
-                <button type="button" className="text-accent" onClick={() => restore(version.id)}>
-                  {t("restore")}
-                </button>
-              </li>
-            ))
-          )}
-        </ul>
-      </div>
-      <div className="flex-1 overflow-auto p-3">
-        <p className="text-sm font-medium">{t("files")}</p>
-        <ul className="mt-2 space-y-1 text-sm">
-          {bundle.files.map((file) => (
-            <li key={file.id}>
-              <button
-                type="button"
-                className={file.path === selectedFile ? "text-accent" : ""}
-                onClick={() => setSelectedFile(file.path)}
-              >
-                {file.path}
-              </button>
-            </li>
-          ))}
-        </ul>
-        {selected ? (
-          <pre className="mt-3 max-h-64 overflow-auto rounded-md border bg-background p-2 text-xs">
-            {selected.content.slice(0, 4000)}
-          </pre>
-        ) : null}
-      </div>
-    </aside>
-  );
-
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
-      <header className="flex flex-wrap items-center gap-3 border-b bg-card px-4 py-3">
-        <button type="button" className="text-sm" onClick={() => router.push("/dashboard")}>
-          ← {t("dashboard")}
-        </button>
-        <form onSubmit={rename} className="flex min-w-0 flex-1 items-center gap-2">
-          <input
-            name="name"
-            defaultValue={bundle.project.name}
-            className="min-w-0 flex-1 rounded-md border bg-background px-2 py-1 text-sm"
-          />
-          <button type="submit" className="rounded-md border px-2 py-1 text-sm">
-            {t("rename")}
+    <div className="flex h-screen overflow-hidden">
+      <AppRail />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex flex-wrap items-center gap-3 border-b bg-white px-4 py-2.5">
+          <button type="button" className="text-sm text-muted" onClick={() => router.push("/dashboard")}>
+            ← {t("projects")}
           </button>
-        </form>
-        <a href={`/api/projects/${bundle.project.id}/export`} className="rounded-md border px-3 py-1 text-sm">
-          {t("export")}
-        </a>
-        {demoMode ? (
-          <span className="rounded-full bg-accent-soft px-3 py-1 text-xs">{t("demoMode")}</span>
-        ) : null}
-      </header>
-      {demoMode ? <p className="border-b bg-accent-soft px-4 py-2 text-xs sm:text-sm">{t("demoModeHint")}</p> : null}
-
-      <div className="flex gap-2 border-b px-3 py-2 lg:hidden">
-        {(["conversation", "preview", "files"] as const).map((item) => (
+          <form onSubmit={rename} className="flex min-w-0 flex-1 items-center gap-2">
+            <input
+              name="name"
+              defaultValue={bundle.project.name}
+              className="min-w-0 flex-1 rounded-xl border-0 bg-transparent px-1 py-1 text-sm font-semibold outline-none focus:bg-slate-50"
+            />
+            <button type="submit" className="rounded-full border px-3 py-1 text-xs font-medium">
+              {t("rename")}
+            </button>
+          </form>
           <button
-            key={item}
             type="button"
-            onClick={() => setTab(item)}
-            className={`rounded-md px-3 py-1 text-sm ${tab === item ? "bg-accent text-white" : "border"}`}
+            onClick={() => setDrawer(drawer === "files" ? "none" : "files")}
+            className="rounded-full border px-3 py-1.5 text-sm"
           >
-            {t(item === "files" ? "files" : item)}
+            {t("files")}
           </button>
-        ))}
-      </div>
+          <button
+            type="button"
+            onClick={() => setDrawer(drawer === "publish" ? "none" : "publish")}
+            className="rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-white"
+          >
+            {publicPath ? t("publishLive") : t("publish")}
+          </button>
+          {demoMode ? (
+            <span className="rounded-full bg-brand-soft px-3 py-1 text-xs font-medium text-brand">{t("demoMode")}</span>
+          ) : null}
+        </header>
+        {demoMode ? <p className="border-b bg-brand-soft px-4 py-2 text-xs sm:text-sm">{t("demoModeHint")}</p> : null}
 
-      <div className="hidden min-h-0 flex-1 lg:grid lg:grid-cols-[minmax(280px,340px)_minmax(0,1fr)_minmax(240px,300px)]">
-        {conversationPanel}
-        {previewPanel}
-        {filesPanel}
-      </div>
-      <div className="min-h-0 flex-1 overflow-hidden lg:hidden">
-        {tab === "conversation" ? conversationPanel : null}
-        {tab === "preview" ? previewPanel : null}
-        {tab === "files" ? filesPanel : null}
+        <div className="flex gap-2 border-b bg-white px-3 py-2 lg:hidden">
+          {(["conversation", "preview"] as const).map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => setTab(item)}
+              className={`rounded-full px-3 py-1 text-sm ${tab === item ? "bg-accent text-white" : "border"}`}
+            >
+              {t(item)}
+            </button>
+          ))}
+        </div>
+
+        <div className="relative min-h-0 flex-1">
+          <div className="hidden h-full lg:grid lg:grid-cols-[minmax(280px,380px)_minmax(0,1fr)]">
+            {conversationPanel}
+            {previewPanel}
+          </div>
+          <div className="h-full overflow-hidden lg:hidden">
+            {tab === "conversation" ? conversationPanel : previewPanel}
+          </div>
+
+          {drawer !== "none" ? (
+            <aside className="absolute inset-y-0 right-0 z-20 flex w-full max-w-sm flex-col border-l bg-white shadow-2xl">
+              <div className="flex items-center justify-between border-b px-4 py-3">
+                <p className="font-semibold">{drawer === "publish" ? t("publish") : t("files")}</p>
+                <button type="button" className="text-sm text-muted" onClick={() => setDrawer("none")}>
+                  {t("cancel")}
+                </button>
+              </div>
+              {drawer === "publish" ? (
+                <div className="space-y-3 p-4 text-sm">
+                  <p className="text-muted">{t("publishHint")}</p>
+                  {publicPath ? (
+                    <>
+                      <p className="break-all rounded-2xl bg-slate-50 px-3 py-2 font-mono text-xs">{publicPath}</p>
+                      <button
+                        type="button"
+                        onClick={() => void copyPublicLink()}
+                        className="flex w-full justify-center rounded-full bg-accent px-4 py-2.5 font-semibold text-white"
+                      >
+                        {copied ? t("copied") : t("copyLink")}
+                      </button>
+                      <a
+                        href={publicPath}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex justify-center rounded-full border px-4 py-2.5 font-medium"
+                      >
+                        {t("openPublicSite")}
+                      </a>
+                      <button
+                        type="button"
+                        disabled={publishBusy}
+                        onClick={() => void publish(true)}
+                        className="flex w-full justify-center rounded-full border px-4 py-2.5 disabled:opacity-60"
+                      >
+                        {t("rotateLink")}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={publishBusy}
+                        onClick={() => void unpublish()}
+                        className="flex w-full justify-center rounded-full border px-4 py-2.5 text-danger disabled:opacity-60"
+                      >
+                        {t("unpublish")}
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={publishBusy || !hasPreview}
+                      onClick={() => void publish(false)}
+                      className="flex w-full justify-center rounded-full bg-accent px-4 py-2.5 font-semibold text-white disabled:opacity-60"
+                    >
+                      {t("putOnline")}
+                    </button>
+                  )}
+                  {hasPreview ? (
+                    <a
+                      href={previewSrc}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex justify-center rounded-full border px-4 py-2.5 font-medium"
+                    >
+                      {t("openPreview")}
+                    </a>
+                  ) : null}
+                  <a
+                    href={`/api/projects/${bundle.project.id}/export`}
+                    className="flex justify-center rounded-full border px-4 py-2.5 font-medium"
+                  >
+                    {t("export")}
+                  </a>
+                </div>
+              ) : (
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                  <div className="border-b p-4">
+                    <p className="text-sm font-medium">{t("versions")}</p>
+                    <ul className="mt-2 max-h-40 space-y-2 overflow-auto text-sm">
+                      {bundle.versions.length === 0 ? (
+                        <li className="text-muted">{t("noVersions")}</li>
+                      ) : (
+                        bundle.versions.map((version) => (
+                          <li key={version.id} className="flex items-center justify-between gap-2">
+                            <span className="truncate">{version.label}</span>
+                            <button type="button" className="text-brand" onClick={() => restore(version.id)}>
+                              {t("restore")}
+                            </button>
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  </div>
+                  <div className="flex-1 overflow-auto p-4">
+                    <p className="text-sm font-medium">{t("files")}</p>
+                    <ul className="mt-2 space-y-1 text-sm">
+                      {bundle.files.map((file) => (
+                        <li key={file.id}>
+                          <button
+                            type="button"
+                            className={file.path === selectedFile ? "font-semibold text-brand" : "text-muted"}
+                            onClick={() => setSelectedFile(file.path)}
+                          >
+                            {file.path}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    {selected ? (
+                      <pre className="mt-3 max-h-64 overflow-auto rounded-2xl border bg-slate-50 p-3 text-xs">
+                        {selected.content.slice(0, 4000)}
+                      </pre>
+                    ) : null}
+                  </div>
+                </div>
+              )}
+            </aside>
+          ) : null}
+        </div>
       </div>
     </div>
+  );
+}
+
+function Bubble({
+  children,
+  role,
+  demo,
+}: {
+  children: ReactNode;
+  role: "user" | "assistant";
+  demo?: boolean;
+}) {
+  const isUser = role === "user";
+  return (
+    <article className={`flex gap-2 ${isUser ? "flex-row-reverse" : ""}`}>
+      <span
+        className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+          isUser ? "bg-brand-soft text-brand" : "bg-emerald-100 text-emerald-800"
+        }`}
+      >
+        {isUser ? "Vous" : "IA"}
+      </span>
+      <div className={`max-w-[90%] rounded-2xl px-3 py-2 text-sm ${isUser ? "bg-brand-soft" : "bg-slate-50"}`}>
+        {demo ? <p className="mb-1 text-[10px] uppercase tracking-wide text-muted">{t("demoMode")}</p> : null}
+        <div className="whitespace-pre-wrap">{children}</div>
+      </div>
+    </article>
   );
 }

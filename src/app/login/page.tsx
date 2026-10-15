@@ -15,7 +15,7 @@ export default function LoginPage() {
         </Suspense>
         <p className="mx-auto mt-4 max-w-md text-center text-sm text-muted">
           Pas encore de compte ?{" "}
-          <Link href="/signup" className="text-accent underline">
+          <Link href="/signup" className="font-medium text-brand">
             {t("signup")}
           </Link>
         </p>

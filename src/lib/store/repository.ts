@@ -66,4 +66,10 @@ export interface Repository {
     ownerId: string,
     projectId: string,
   ): Promise<{ conversation: Conversation; messages: Message[]; files: ProjectFile[] }>;
+  setPublishToken(
+    ownerId: string,
+    projectId: string,
+    token: string | null,
+  ): Promise<Project>;
+  getPublishedSite(token: string): Promise<{ name: string; files: ProjectFile[] }>;
 }

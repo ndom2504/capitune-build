@@ -75,7 +75,7 @@ export function createLocalRepository(filePath: string): Repository {
       throw new NotFoundError("Conversation introuvable.");
     }
     return {
-      project,
+      project: { ...project, publishToken: project.publishToken ?? null },
       files: state.files.filter((item) => item.projectId === project.id),
       conversation,
       messages: state.messages.filter((item) => item.conversationId === conversation.id),
@@ -129,7 +129,8 @@ export function createLocalRepository(filePath: string): Repository {
       const state = await load();
       return state.projects
         .filter((project) => project.ownerId === ownerId)
-        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+        .map((project) => ({ ...project, publishToken: project.publishToken ?? null }));
     },
 
     async createProject(input): Promise<ProjectBundle> {
@@ -140,6 +141,7 @@ export function createLocalRepository(filePath: string): Repository {
           ownerId: input.ownerId,
           name: input.name.trim(),
           description: input.description.trim(),
+          publishToken: null,
           createdAt,
           updatedAt: createdAt,
         };
@@ -300,6 +302,33 @@ export function createLocalRepository(filePath: string): Repository {
         conversation: bundleData.conversation,
         messages: bundleData.messages,
         files: bundleData.files,
+      };
+    },
+
+    async setPublishToken(ownerId, projectId, token) {
+      return mutate((state) => {
+        const project = requireOwnedProject(state, ownerId, projectId);
+        if (token) {
+          const clash = state.projects.find((item) => item.publishToken === token && item.id !== projectId);
+          if (clash) {
+            throw new Error("Jeton de publication déjà utilisé.");
+          }
+        }
+        project.publishToken = token;
+        project.updatedAt = nowIso();
+        return project;
+      });
+    },
+
+    async getPublishedSite(token) {
+      const state = await load();
+      const project = state.projects.find((item) => item.publishToken === token);
+      if (!project) {
+        throw new NotFoundError("Site introuvable.");
+      }
+      return {
+        name: project.name,
+        files: state.files.filter((item) => item.projectId === project.id),
       };
     },
   };

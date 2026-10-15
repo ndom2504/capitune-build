@@ -21,6 +21,7 @@ export type ProjectRow = {
   owner_id: string;
   name: string;
   description: string;
+  publish_token?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -84,6 +85,7 @@ export function mapProject(row: ProjectRow): Project {
     ownerId: row.owner_id,
     name: row.name,
     description: row.description,
+    publishToken: row.publish_token ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

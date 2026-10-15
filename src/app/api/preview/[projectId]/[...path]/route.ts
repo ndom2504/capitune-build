@@ -1,6 +1,6 @@
 import { requireUser } from "@/lib/auth/server";
 import { errorResponse } from "@/lib/http/guard";
-import { previewContentType, previewSecurityHeaders } from "@/lib/preview/headers";
+import { previewFileResponse, previewSecurityHeaders } from "@/lib/preview/headers";
 import { validateProjectPath } from "@/lib/projects/paths";
 import { getRepository } from "@/lib/store";
 
@@ -20,12 +20,7 @@ export async function GET(_request: Request, context: Ctx) {
     if (!file) {
       return new Response("Fichier introuvable.", { status: 404, headers: previewSecurityHeaders() });
     }
-    return new Response(file.content, {
-      headers: {
-        ...previewSecurityHeaders(),
-        "Content-Type": previewContentType(file.path),
-      },
-    });
+    return previewFileResponse(file.content, file.path);
   } catch (error) {
     return errorResponse(error);
   }

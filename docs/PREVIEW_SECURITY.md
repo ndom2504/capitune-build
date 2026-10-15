@@ -4,7 +4,9 @@
 
 Les projets générés sont des fichiers HTML/CSS (éventuellement JS) stockés comme données utilisateur, séparées du code de Capitune.
 
-L’aperçu est servi par `/api/preview/[projectId]/...` après vérification du propriétaire. L’iframe du workspace utilise `sandbox="allow-scripts"` **sans** `allow-same-origin`.
+L’aperçu authentifié est servi par `/api/preview/[projectId]/...` après vérification du propriétaire. L’iframe du workspace utilise `sandbox="allow-scripts"` **sans** `allow-same-origin`.
+
+Un site **publié** est servi par `/s/[jeton]/index.html` sans session : uniquement les fichiers du projet, jamais la conversation. `/s/[jeton]` redirige vers `index.html` pour que les CSS/JS relatifs se résolvent. Le jeton est imprévisible ; le retirer invalide le lien. La même CSP s’applique.
 
 Cela donne à la page générée une origine opaque : elle ne peut pas lire le DOM parent ni, en principe, les cookies de l’application Capitune.
 
@@ -13,7 +15,8 @@ Cela donne à la page générée une origine opaque : elle ne peut pas lire le D
 - Une iframe seule n’est pas une frontière de sécurité suffisante.
 - Le contenu est encore servi depuis la même origine applicative (`/api/preview/...`).
 - `script-src 'unsafe-inline'` autorise le JS inline dans l’aperçu, limité au bac à sable.
-- Un onglet ouvert directement sur l’URL d’aperçu reste authentifié.
+- Un onglet ouvert directement sur `/api/preview/...` reste authentifié.
+- Un lien `/s/[jeton]/` est public : quiconque a l’URL voit les fichiers générés.
 
 ## En-têtes
 

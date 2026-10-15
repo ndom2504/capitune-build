@@ -24,8 +24,11 @@ describe("supabase row mappers", () => {
         description: "Demo",
         created_at: "2026-01-01T00:00:00.000Z",
         updated_at: "2026-01-02T00:00:00.000Z",
-      }).ownerId,
-    ).toBe("11111111-1111-4111-8111-111111111111");
+      }),
+    ).toMatchObject({
+      ownerId: "11111111-1111-4111-8111-111111111111",
+      publishToken: null,
+    });
   });
 
   it("accepts uuid v4 identifiers", () => {

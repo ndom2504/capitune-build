@@ -6,7 +6,7 @@ Le store JSON local (`.data/store.json`) reste le défaut (`DATA_STORE=local`). 
 
 1. Créer un projet dans le palier gratuit.
 2. Authentication → Providers → Email : pour le développement local, désactiver **Confirm email** (sinon l’inscription attend un lien mail).
-3. Exécuter `supabase/migrations/0001_init.sql` dans le SQL Editor.
+3. Exécuter `supabase/migrations/0001_init.sql` puis `0002_publish.sql` dans le SQL Editor.
 4. Settings → API : copier Project URL, `anon` `public`, et `service_role`.
 5. Dans `.env.local` :
 

@@ -10,6 +10,7 @@ export type Project = {
   ownerId: string;
   name: string;
   description: string;
+  publishToken: string | null;
   createdAt: string;
   updatedAt: string;
 };
