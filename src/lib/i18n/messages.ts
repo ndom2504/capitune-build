@@ -82,6 +82,8 @@ export const messages = {
     putOnline: "Mettre en ligne",
     openPreview: "Ouvrir l’aperçu",
     openPublicSite: "Ouvrir le site public",
+    publishSchemaMissing:
+      "La publication Postgres n’est pas prête. Dans Supabase → SQL Editor, exécutez supabase/migrations/0002_publish.sql puis rechargez.",
     conversationEmpty: "Décrivez le site à générer, ou choisissez un exemple.",
     examplesTitle: "Exemples",
     examplePrompt1:
@@ -208,6 +210,8 @@ export const messages = {
     putOnline: "Put online",
     openPreview: "Open preview",
     openPublicSite: "Open public site",
+    publishSchemaMissing:
+      "Postgres publishing is not ready. In Supabase → SQL Editor, run supabase/migrations/0002_publish.sql then reload.",
     conversationEmpty: "Describe the site to generate, or pick an example.",
     examplesTitle: "Examples",
     examplePrompt1:

@@ -10,7 +10,8 @@ import {
 } from "@/lib/publish/url";
 import { validateProjectPath } from "@/lib/projects/paths";
 import { getRepository } from "@/lib/store";
-import { NotFoundError } from "@/lib/store/repository";
+import { publishedNotFoundResponse } from "@/lib/publish/not-found-page";
+import { NotFoundError, PublishSchemaError } from "@/lib/store/repository";
 
 type Ctx = { params: Promise<{ token: string; path?: string[] }> };
 
@@ -38,13 +39,10 @@ export async function GET(request: Request, context: Ctx) {
     return previewFileResponse(body, file.path);
   } catch (error) {
     if (error instanceof NotFoundError) {
-      return new Response(
-        "<!doctype html><html lang=\"fr\"><body style=\"font-family:sans-serif;padding:2rem\">Site introuvable.</body></html>",
-        {
-          status: 404,
-          headers: { ...previewSecurityHeaders(), "Content-Type": "text/html; charset=utf-8" },
-        },
-      );
+      return publishedNotFoundResponse();
+    }
+    if (error instanceof PublishSchemaError) {
+      return publishedNotFoundResponse(503);
     }
     return errorResponse(error);
   }

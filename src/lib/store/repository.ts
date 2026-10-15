@@ -23,6 +23,15 @@ export class NotFoundError extends Error {
   }
 }
 
+export class PublishSchemaError extends Error {
+  constructor(
+    message = "La colonne publish_token manque. Exécutez supabase/migrations/0002_publish.sql dans le SQL Editor Supabase.",
+  ) {
+    super(message);
+    this.name = "PublishSchemaError";
+  }
+}
+
 export type CreateUserInput = {
   id?: string;
   email: string;
@@ -72,4 +81,5 @@ export interface Repository {
     token: string | null,
   ): Promise<Project>;
   getPublishedSite(token: string): Promise<{ name: string; files: ProjectFile[] }>;
+  publishSchemaReady(): Promise<boolean>;
 }

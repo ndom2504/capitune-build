@@ -12,8 +12,15 @@ export default async function DashboardPage() {
   if (!user) {
     redirect("/login");
   }
-  const projects = await (await getRepository()).listProjects(user.id);
+  const repository = await getRepository();
+  const projects = await repository.listProjects(user.id);
   const env = getEnvStatus();
+  let publishReady = true;
+  try {
+    publishReady = await repository.publishSchemaReady();
+  } catch {
+    publishReady = false;
+  }
 
   return (
     <div className="flex min-h-screen">
@@ -34,8 +41,11 @@ export default async function DashboardPage() {
               {t("persistenceSupabaseMissing")} {env.missing.join(", ")}
             </p>
           ) : null}
+          {!publishReady ? (
+            <p className="mt-3 max-w-2xl rounded-2xl bg-brand-soft px-4 py-3 text-sm">{t("publishSchemaMissing")}</p>
+          ) : null}
           <div className="mt-8">
-            <DashboardClient initialProjects={projects} />
+            <DashboardClient initialProjects={projects} publishReady={publishReady} />
           </div>
         </main>
       </div>

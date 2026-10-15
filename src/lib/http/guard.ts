@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { OwnershipError, NotFoundError } from "@/lib/store/repository";
+import { OwnershipError, NotFoundError, PublishSchemaError } from "@/lib/store/repository";
 import { ZodError } from "zod";
 
 export function errorResponse(error: unknown): NextResponse {
@@ -11,6 +11,9 @@ export function errorResponse(error: unknown): NextResponse {
   }
   if (error instanceof NotFoundError) {
     return NextResponse.json({ error: error.message }, { status: 404 });
+  }
+  if (error instanceof PublishSchemaError) {
+    return NextResponse.json({ error: error.message, code: "PUBLISH_SCHEMA" }, { status: 503 });
   }
   if (error instanceof ZodError) {
     return NextResponse.json({ error: "Requête invalide.", details: error.flatten() }, { status: 400 });

@@ -331,5 +331,9 @@ export function createLocalRepository(filePath: string): Repository {
         files: state.files.filter((item) => item.projectId === project.id),
       };
     },
+
+    async publishSchemaReady() {
+      return true;
+    },
   };
 }

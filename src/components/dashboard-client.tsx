@@ -6,7 +6,13 @@ import type { Project } from "@/lib/domain";
 import { t } from "@/lib/i18n/messages";
 import { publicSitePath } from "@/lib/publish/url";
 
-export function DashboardClient({ initialProjects }: { initialProjects: Project[] }) {
+export function DashboardClient({
+  initialProjects,
+  publishReady = true,
+}: {
+  initialProjects: Project[];
+  publishReady?: boolean;
+}) {
   const router = useRouter();
   const [projects, setProjects] = useState(initialProjects);
   const [name, setName] = useState("");
@@ -15,6 +21,8 @@ export function DashboardClient({ initialProjects }: { initialProjects: Project[
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [creating, setCreating] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [publishBusy, setPublishBusy] = useState<string | null>(null);
 
   const empty = useMemo(() => projects.length === 0, [projects.length]);
 
@@ -45,6 +53,43 @@ export function DashboardClient({ initialProjects }: { initialProjects: Project[
     if (response.ok) {
       setProjects((current) => current.filter((project) => project.id !== id));
     }
+  }
+
+  async function copyPublic(project: Project) {
+    if (!project.publishToken) return;
+    await navigator.clipboard.writeText(`${window.location.origin}${publicSitePath(project.publishToken)}`);
+    setCopiedId(project.id);
+    window.setTimeout(() => setCopiedId(null), 1600);
+  }
+
+  async function publishProject(id: string) {
+    setPublishBusy(id);
+    setError(null);
+    const response = await fetch(`/api/projects/${id}/publish`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const payload = await response.json();
+    setPublishBusy(null);
+    if (!response.ok) {
+      setError(payload.error || "Publication impossible.");
+      return;
+    }
+    setProjects((current) => current.map((project) => (project.id === id ? payload.project : project)));
+  }
+
+  async function unpublishProject(id: string) {
+    setPublishBusy(id);
+    setError(null);
+    const response = await fetch(`/api/projects/${id}/publish`, { method: "DELETE" });
+    const payload = await response.json();
+    setPublishBusy(null);
+    if (!response.ok) {
+      setError(payload.error || "Retrait impossible.");
+      return;
+    }
+    setProjects((current) => current.map((project) => (project.id === id ? payload.project : project)));
   }
 
   async function rename(id: string) {
@@ -118,15 +163,37 @@ export function DashboardClient({ initialProjects }: { initialProjects: Project[
                   {t("open")}
                 </a>
                 {project.publishToken ? (
-                  <a
-                    href={publicSitePath(project.publishToken)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded-full border px-4 py-2 font-medium"
+                  <>
+                    <a
+                      href={publicSitePath(project.publishToken)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-full border px-4 py-2 font-medium"
+                    >
+                      {t("openPublicSite")}
+                    </a>
+                    <button type="button" onClick={() => void copyPublic(project)} className="rounded-full border px-4 py-2">
+                      {copiedId === project.id ? t("copied") : t("copyLink")}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={publishBusy === project.id || !publishReady}
+                      onClick={() => void unpublishProject(project.id)}
+                      className="rounded-full border px-4 py-2 text-danger disabled:opacity-40"
+                    >
+                      {t("unpublish")}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={publishBusy === project.id || !publishReady}
+                    onClick={() => void publishProject(project.id)}
+                    className="rounded-full border px-4 py-2 font-medium disabled:opacity-40"
                   >
-                    {t("openPublicSite")}
-                  </a>
-                ) : null}
+                    {t("putOnline")}
+                  </button>
+                )}
                 {renaming === project.id ? (
                   <>
                     <input

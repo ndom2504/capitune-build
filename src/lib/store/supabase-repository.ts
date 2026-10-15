@@ -23,9 +23,11 @@ import {
   type VersionFileRow,
   type VersionRow,
 } from "@/lib/store/mappers";
+import { isMissingPublishColumn } from "@/lib/publish/ready";
 import {
   NotFoundError,
   OwnershipError,
+  PublishSchemaError,
   type CreateUserInput,
   type Repository,
   type StoredUser,
@@ -290,10 +292,8 @@ export function createSupabaseRepository(admin: SupabaseClient): Repository {
         .select("*")
         .single();
       if (error) {
-        if (error.message.toLowerCase().includes("publish_token")) {
-          throw new Error(
-            "La colonne publish_token manque. Exécutez supabase/migrations/0002_publish.sql dans le SQL Editor.",
-          );
+        if (isMissingPublishColumn(error.message)) {
+          throw new PublishSchemaError();
         }
         throw new Error(error.message);
       }
@@ -307,8 +307,8 @@ export function createSupabaseRepository(admin: SupabaseClient): Repository {
         .eq("publish_token", token)
         .maybeSingle();
       if (error) {
-        if (error.message.toLowerCase().includes("publish_token")) {
-          throw new NotFoundError("Site introuvable.");
+        if (isMissingPublishColumn(error.message)) {
+          throw new PublishSchemaError();
         }
         throw new Error(error.message);
       }
@@ -326,6 +326,13 @@ export function createSupabaseRepository(admin: SupabaseClient): Repository {
         name: row.name,
         files: ((files || []) as FileRow[]).map(mapFile),
       };
+    },
+
+    async publishSchemaReady() {
+      const { error } = await admin.from("projects").select("publish_token").limit(1);
+      if (!error) return true;
+      if (isMissingPublishColumn(error.message)) return false;
+      throw new Error(error.message);
     },
   };
 }
