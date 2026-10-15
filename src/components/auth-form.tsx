@@ -17,10 +17,12 @@ export function AuthForm({
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState<string | null>(search.get("error"));
-  const [pending, setPending] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState(false);
+  const [pendingGoogle, setPendingGoogle] = useState(false);
+  const busy = pendingEmail || pendingGoogle;
 
   async function onGoogle() {
-    setPending(true);
+    setPendingGoogle(true);
     setError(null);
     const response = await fetch("/api/auth/google", {
       method: "POST",
@@ -29,7 +31,7 @@ export function AuthForm({
     });
     const payload = (await response.json()) as { url?: string; error?: string };
     if (!response.ok || !payload.url) {
-      setPending(false);
+      setPendingGoogle(false);
       setError(payload.error || "Connexion Google impossible.");
       return;
     }
@@ -38,7 +40,7 @@ export function AuthForm({
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    setPending(true);
+    setPendingEmail(true);
     setError(null);
     const response = await fetch(mode === "login" ? "/api/auth/login" : "/api/auth/signup", {
       method: "POST",
@@ -46,7 +48,7 @@ export function AuthForm({
       body: JSON.stringify({ email, password, displayName }),
     });
     const payload = (await response.json()) as { error?: string; needsConfirmation?: boolean };
-    setPending(false);
+    setPendingEmail(false);
     if (payload.needsConfirmation) {
       setError(payload.error || "Confirmez votre e-mail, puis connectez-vous.");
       return;
@@ -60,7 +62,7 @@ export function AuthForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="mx-auto w-full max-w-md space-y-4 rounded-xl border bg-card p-6 shadow-sm">
+    <div className="mx-auto w-full max-w-md space-y-4 rounded-xl border bg-card p-6 shadow-sm">
       <h1 className="font-[family-name:var(--font-serif-actual)] text-3xl">
         {mode === "login" ? t("login") : t("signup")}
       </h1>
@@ -68,57 +70,59 @@ export function AuthForm({
         <>
           <button
             type="button"
-            disabled={pending}
+            disabled={busy}
             onClick={() => void onGoogle()}
             className="flex w-full items-center justify-center gap-2 rounded-md border bg-background px-4 py-2.5 text-sm disabled:opacity-60"
           >
             <GoogleMark />
-            {t("continueWithGoogle")}
+            {pendingGoogle ? "…" : t("continueWithGoogle")}
           </button>
           <p className="text-center text-xs uppercase tracking-wide text-muted">{t("orEmail")}</p>
         </>
       ) : null}
-      {mode === "signup" ? (
+      <form onSubmit={onSubmit} className="space-y-4">
+        {mode === "signup" ? (
+          <label className="block space-y-1 text-sm">
+            <span>{t("name")}</span>
+            <input
+              required
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+              className="w-full rounded-md border bg-background px-3 py-2"
+            />
+          </label>
+        ) : null}
         <label className="block space-y-1 text-sm">
-          <span>{t("name")}</span>
+          <span>{t("email")}</span>
           <input
             required
-            value={displayName}
-            onChange={(event) => setDisplayName(event.target.value)}
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
             className="w-full rounded-md border bg-background px-3 py-2"
           />
         </label>
-      ) : null}
-      <label className="block space-y-1 text-sm">
-        <span>{t("email")}</span>
-        <input
-          required
-          type="email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          className="w-full rounded-md border bg-background px-3 py-2"
-        />
-      </label>
-      <label className="block space-y-1 text-sm">
-        <span>{t("password")}</span>
-        <input
-          required
-          type="password"
-          minLength={mode === "signup" ? 8 : 1}
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          className="w-full rounded-md border bg-background px-3 py-2"
-        />
-      </label>
-      {error ? <p className="text-sm text-danger">{error}</p> : null}
-      <button
-        type="submit"
-        disabled={pending}
-        className="w-full rounded-md bg-accent px-4 py-2.5 text-white disabled:opacity-60"
-      >
-        {pending ? "…" : mode === "login" ? t("login") : t("signup")}
-      </button>
-    </form>
+        <label className="block space-y-1 text-sm">
+          <span>{t("password")}</span>
+          <input
+            required
+            type="password"
+            minLength={mode === "signup" ? 8 : 1}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            className="w-full rounded-md border bg-background px-3 py-2"
+          />
+        </label>
+        {error ? <p className="text-sm text-danger">{error}</p> : null}
+        <button
+          type="submit"
+          disabled={busy}
+          className="w-full rounded-md bg-accent px-4 py-2.5 text-white disabled:opacity-60"
+        >
+          {pendingEmail ? "…" : mode === "login" ? t("login") : t("signup")}
+        </button>
+      </form>
+    </div>
   );
 }
 

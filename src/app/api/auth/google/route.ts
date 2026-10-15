@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { errorResponse } from "@/lib/http/guard";
-import { safeNextPath } from "@/lib/auth/redirect";
+import { oauthCallbackUrl, safeNextPath } from "@/lib/auth/redirect";
 import { isSupabaseEnabled } from "@/lib/supabase/config";
 import { createSupabaseRouteClient } from "@/lib/supabase/route-client";
 
@@ -15,21 +15,21 @@ export async function POST(request: Request) {
 
     const body = (await request.json().catch(() => ({}))) as { next?: string };
     const next = safeNextPath(body.next);
-    const origin = new URL(request.url).origin;
     const response = NextResponse.json({ ok: true });
     const supabase = createSupabaseRouteClient(request, response);
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        redirectTo: oauthCallbackUrl(request, next),
         queryParams: { access_type: "offline", prompt: "select_account" },
       },
     });
     if (error || !data.url) {
-      return NextResponse.json(
-        { error: error?.message || "Impossible de démarrer la connexion Google." },
-        { status: 400 },
-      );
+      const raw = error?.message || "";
+      const message = /provider is not enabled|Unsupported provider/i.test(raw)
+        ? "Google n’est pas activé dans Supabase. Authentication → Providers → Google : activer, coller Client ID et Client Secret, puis enregistrer."
+        : raw || "Impossible de démarrer la connexion Google.";
+      return NextResponse.json({ error: message }, { status: 400 });
     }
     return NextResponse.json({ url: data.url }, { headers: response.headers });
   } catch (error) {

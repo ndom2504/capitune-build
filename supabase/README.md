@@ -32,6 +32,13 @@ Capitune utilise le fournisseur Google de **Supabase Auth** (même session et m�
 3. Authorized redirect URIs : `https://<ref>.supabase.co/auth/v1/callback`.
 4. Supabase → Authentication → Providers → **Google** : coller Client ID et Client Secret, activer.
 5. Supabase → Authentication → URL configuration :
-   - Site URL : `http://localhost:3000`
-   - Redirect URLs : `http://localhost:3000/auth/callback`
+   - Site URL : `https://www.capitune.com` (prod) ou `http://localhost:3000` (dev)
+   - Redirect URLs (toutes) :
+     - `http://localhost:3000/auth/callback`
+     - `https://www.capitune.com/auth/callback`
+     - `https://capitune.com/auth/callback`
+     - `https://www.capitune.com/**`
+     - `https://capitune.com/**`
+
+Si une URL n’est pas dans cette liste, Supabase renvoie vers la Site URL (la page d’accueil) après Google.
 

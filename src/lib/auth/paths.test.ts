@@ -13,6 +13,8 @@ describe("auth helpers", () => {
 
   it("rejects open redirects", () => {
     expect(safeNextPath("/dashboard")).toBe("/dashboard");
+    expect(safeNextPath("/")).toBe("/dashboard");
+    expect(safeNextPath("/login")).toBe("/dashboard");
     expect(safeNextPath("//evil.example")).toBe("/dashboard");
     expect(safeNextPath("https://evil.example")).toBe("/dashboard");
   });

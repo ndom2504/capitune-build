@@ -27,7 +27,7 @@ export async function GET(request: Request) {
     return NextResponse.redirect(login);
   }
 
-  const redirect = NextResponse.redirect(new URL(next, url.origin));
+  const redirect = NextResponse.redirect(new URL(next === "/" ? "/dashboard" : next, url.origin));
   const supabase = createSupabaseRouteClient(request, redirect);
   const { error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) {

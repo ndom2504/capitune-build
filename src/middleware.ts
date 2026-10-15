@@ -41,6 +41,15 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
+  if (pathname !== "/auth/callback" && request.nextUrl.searchParams.has("code")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/auth/callback";
+    if (!url.searchParams.get("next")) {
+      url.searchParams.set("next", "/dashboard");
+    }
+    return copyCookies(response, NextResponse.redirect(url));
+  }
+
   if (isProtectedPath(pathname) && !hasSession) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
@@ -58,5 +67,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/workspace/:path*", "/login", "/signup", "/auth/callback"],
+  matcher: ["/", "/dashboard/:path*", "/workspace/:path*", "/login", "/signup", "/auth/callback"],
 };
