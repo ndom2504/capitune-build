@@ -2,14 +2,13 @@
 
 Capitune génère des sites web à partir d’instructions en langage naturel. Ce dépôt est le code de la **plateforme**, distinct des fichiers générés pour chaque projet utilisateur.
 
-## État du jalon 2
+## État du jalon 3
 
 Application Next.js avec :
 
 - pages `/`, `/login`, `/signup`, `/dashboard`, `/workspace/[projectId]`
-- store JSON local par défaut (`DATA_STORE=local`) ou Auth + Postgres Supabase (`DATA_STORE=supabase`)
-- projet de démonstration créé à l’inscription (et à la première connexion Supabase)
-- conversation → génération déterministe (mode démo sans clé IA)
+- Auth e-mail + Google via Supabase, persistance Postgres
+- génération **IA réelle** si `AI_API_KEY` est défini (OpenAI-compatible) ; sinon mode démonstration explicite
 - aperçu HTML/CSS sandboxé, versions récupérables, export ZIP
 - ownership vérifié côté serveur ; RLS activé sur le schéma Supabase
 
@@ -29,6 +28,8 @@ npm run dev
 Ouvrir [http://localhost:3000](http://localhost:3000). Créer un compte, ouvrir le projet **Atelier vitrine**, envoyer une instruction.
 
 Sans `AI_API_KEY`, l’interface affiche clairement le **mode démonstration**. Ce n’est pas une requête modèle réelle.
+
+En production (Vercel), ajoute `AI_API_KEY` (et optionnellement `AI_BASE_URL` / `AI_MODEL`) dans les variables d’environnement, puis redéploie. Sinon le site public reste en démo.
 
 ## Scripts
 
