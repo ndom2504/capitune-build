@@ -26,7 +26,7 @@ export default async function DashboardPage() {
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-6 pb-16">
-        <h1 className="font-[family-name:var(--font-serif-actual)] text-4xl">{t("dashboard")}</h1>
+        <h1 className="text-4xl font-extrabold tracking-tight">{t("dashboard")}</h1>
         {isDemoAI() ? (
           <p className="mt-3 max-w-2xl rounded-md bg-accent-soft px-3 py-2 text-sm">{t("demoModeHint")}</p>
         ) : null}

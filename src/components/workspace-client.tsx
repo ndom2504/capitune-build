@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { ProjectBundle } from "@/lib/domain";
 import { t } from "@/lib/i18n/messages";
@@ -32,6 +32,7 @@ export function WorkspaceClient({
   const [selectedFile, setSelectedFile] = useState<string | null>(
     initial.files.find((file) => file.path === "index.html")?.path ?? initial.files[0]?.path ?? null,
   );
+  const threadRef = useRef<HTMLDivElement>(null);
 
   const previewSrc = `/api/preview/${bundle.project.id}/index.html?v=${previewKey}`;
   const selected = useMemo(
@@ -39,17 +40,25 @@ export function WorkspaceClient({
     [bundle.files, selectedFile],
   );
 
+  useEffect(() => {
+    const node = threadRef.current;
+    if (node) node.scrollTop = node.scrollHeight;
+  }, [bundle.messages, pending, lastPrompt, error]);
+
   async function refreshBundle() {
     const response = await fetch(`/api/projects/${bundle.project.id}`);
     if (response.ok) {
-      setBundle(await response.json());
+      const next = (await response.json()) as ProjectBundle;
+      setBundle(next);
       setPreviewKey((value) => value + 1);
+      const html = next.files.find((file) => file.path === "index.html")?.path ?? next.files[0]?.path;
+      if (html) setSelectedFile(html);
     }
   }
 
   async function generate(text: string) {
     const value = text.trim();
-    if (!value) return;
+    if (!value || pending) return;
     setPending(true);
     setError(null);
     setLastPrompt(value);
@@ -66,6 +75,7 @@ export function WorkspaceClient({
     }
     setPrompt("");
     await refreshBundle();
+    setTab("preview");
   }
 
   async function restore(versionId: string) {
@@ -83,6 +93,7 @@ export function WorkspaceClient({
       return;
     }
     await refreshBundle();
+    setTab("preview");
   }
 
   async function rename(event: FormEvent<HTMLFormElement>) {
@@ -97,10 +108,17 @@ export function WorkspaceClient({
     await refreshBundle();
   }
 
+  function onPromptKey(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      void generate(prompt);
+    }
+  }
+
   const conversationPanel = (
     <section className="flex h-full min-h-0 flex-col border-r bg-card">
-      <div className="flex-1 space-y-3 overflow-y-auto p-4">
-        {bundle.messages.length === 0 ? (
+      <div ref={threadRef} className="flex-1 space-y-3 overflow-y-auto p-4">
+        {bundle.messages.length === 0 && !pending ? (
           <p className="text-sm text-muted">Décrivez le site à générer pour commencer.</p>
         ) : (
           bundle.messages.map((message) => (
@@ -118,6 +136,18 @@ export function WorkspaceClient({
             </article>
           ))
         )}
+        {pending ? (
+          <article className="rounded-lg bg-accent-soft px-3 py-2 text-sm">
+            <p className="text-xs uppercase tracking-wide text-muted">Vous</p>
+            <p className="mt-1 whitespace-pre-wrap">{lastPrompt}</p>
+          </article>
+        ) : null}
+        {pending ? (
+          <article className="rounded-lg border bg-background px-3 py-2 text-sm">
+            <p className="text-xs uppercase tracking-wide text-muted">Capitune</p>
+            <p className="mt-1 text-muted">{t("generatingHint")}</p>
+          </article>
+        ) : null}
       </div>
       {error ? (
         <div className="border-t px-4 py-3 text-sm text-danger">
@@ -129,7 +159,6 @@ export function WorkspaceClient({
           ) : null}
         </div>
       ) : null}
-      {pending ? <p className="px-4 text-sm text-muted">{t("generating")}</p> : null}
       <form
         className="border-t p-3"
         onSubmit={(event) => {
@@ -140,17 +169,22 @@ export function WorkspaceClient({
         <textarea
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
+          onKeyDown={onPromptKey}
           placeholder={t("promptPlaceholder")}
           rows={3}
-          className="w-full resize-none rounded-md border bg-background px-3 py-2 text-sm"
-        />
-        <button
-          type="submit"
           disabled={pending}
-          className="mt-2 w-full rounded-md bg-accent px-3 py-2 text-sm text-white disabled:opacity-60"
-        >
-          {t("send")}
-        </button>
+          className="w-full resize-none rounded-md border bg-background px-3 py-2 text-sm disabled:opacity-60"
+        />
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <p className="text-xs text-muted">{t("sendHint")}</p>
+          <button
+            type="submit"
+            disabled={pending || !prompt.trim()}
+            className="rounded-md bg-accent px-3 py-2 text-sm text-white disabled:opacity-60"
+          >
+            {pending ? t("generating") : t("send")}
+          </button>
+        </div>
       </form>
     </section>
   );
@@ -170,14 +204,14 @@ export function WorkspaceClient({
         ))}
         {pending ? <span className="ml-auto text-muted">{t("generating")}</span> : null}
       </div>
-      <div className="flex flex-1 justify-center overflow-auto p-3">
+      <div className="relative flex flex-1 justify-center overflow-auto p-3">
         {bundle.files.some((file) => file.path === "index.html") ? (
           <iframe
             title="Aperçu du projet"
             src={previewSrc}
             sandbox="allow-scripts"
             referrerPolicy="no-referrer"
-            className="h-full min-h-[480px] rounded-md border bg-white"
+            className={`h-full min-h-[480px] rounded-md border bg-white ${pending ? "opacity-50" : ""}`}
             style={{ width: frames[device], maxWidth: "100%" }}
           />
         ) : (
@@ -231,7 +265,7 @@ export function WorkspaceClient({
   );
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-screen flex-col overflow-hidden">
       <header className="flex flex-wrap items-center gap-3 border-b bg-card px-4 py-3">
         <button type="button" className="text-sm" onClick={() => router.push("/dashboard")}>
           ← {t("dashboard")}
@@ -268,12 +302,12 @@ export function WorkspaceClient({
         ))}
       </div>
 
-      <div className="hidden min-h-0 flex-1 lg:grid lg:grid-cols-[320px_minmax(0,1fr)_280px]">
+      <div className="hidden min-h-0 flex-1 lg:grid lg:grid-cols-[minmax(280px,340px)_minmax(0,1fr)_minmax(240px,300px)]">
         {conversationPanel}
         {previewPanel}
         {filesPanel}
       </div>
-      <div className="min-h-0 flex-1 lg:hidden">
+      <div className="min-h-0 flex-1 overflow-hidden lg:hidden">
         {tab === "conversation" ? conversationPanel : null}
         {tab === "preview" ? previewPanel : null}
         {tab === "files" ? filesPanel : null}

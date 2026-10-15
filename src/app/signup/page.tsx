@@ -7,7 +7,7 @@ import { isSupabaseEnabled } from "@/lib/supabase/config";
 
 export default function SignupPage() {
   return (
-    <div className="min-h-screen px-6 py-10">
+    <div className="min-h-screen px-6 py-8">
       <Brand />
       <div className="mt-16">
         <Suspense>

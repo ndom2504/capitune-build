@@ -62,8 +62,8 @@ export function AuthForm({
   }
 
   return (
-    <div className="mx-auto w-full max-w-md space-y-4 rounded-xl border bg-card p-6 shadow-sm">
-      <h1 className="font-[family-name:var(--font-serif-actual)] text-3xl">
+    <div className="mx-auto w-full max-w-md space-y-4 rounded-3xl border bg-card p-6 shadow-[0_20px_50px_-28px_rgba(15,23,42,0.35)]">
+      <h1 className="text-3xl font-extrabold tracking-tight">
         {mode === "login" ? t("login") : t("signup")}
       </h1>
       {googleEnabled ? (
@@ -72,7 +72,7 @@ export function AuthForm({
             type="button"
             disabled={busy}
             onClick={() => void onGoogle()}
-            className="flex w-full items-center justify-center gap-2 rounded-md border bg-background px-4 py-2.5 text-sm disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-full border bg-background px-4 py-2.5 text-sm font-medium disabled:opacity-60"
           >
             <GoogleMark />
             {pendingGoogle ? "…" : t("continueWithGoogle")}
@@ -88,7 +88,7 @@ export function AuthForm({
               required
               value={displayName}
               onChange={(event) => setDisplayName(event.target.value)}
-              className="w-full rounded-md border bg-background px-3 py-2"
+              className="w-full rounded-xl border bg-background px-3 py-2"
             />
           </label>
         ) : null}
@@ -99,7 +99,7 @@ export function AuthForm({
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            className="w-full rounded-md border bg-background px-3 py-2"
+            className="w-full rounded-xl border bg-background px-3 py-2"
           />
         </label>
         <label className="block space-y-1 text-sm">
@@ -110,14 +110,14 @@ export function AuthForm({
             minLength={mode === "signup" ? 8 : 1}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            className="w-full rounded-md border bg-background px-3 py-2"
+            className="w-full rounded-xl border bg-background px-3 py-2"
           />
         </label>
         {error ? <p className="text-sm text-danger">{error}</p> : null}
         <button
           type="submit"
           disabled={busy}
-          className="w-full rounded-md bg-accent px-4 py-2.5 text-white disabled:opacity-60"
+          className="w-full rounded-full bg-accent px-4 py-2.5 font-semibold text-white disabled:opacity-60"
         >
           {pendingEmail ? "…" : mode === "login" ? t("login") : t("signup")}
         </button>

@@ -1,21 +1,16 @@
 import type { Metadata } from "next";
-import { Instrument_Sans, Instrument_Serif } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
-const sans = Instrument_Sans({
+const sans = Plus_Jakarta_Sans({
   variable: "--font-sans-actual",
   subsets: ["latin"],
-});
-
-const serif = Instrument_Serif({
-  variable: "--font-serif-actual",
-  subsets: ["latin"],
-  weight: "400",
+  weight: ["400", "500", "600", "700", "800"],
 });
 
 export const metadata: Metadata = {
   title: "Capitune",
-  description: "Générez des sites web à partir d’instructions en langage naturel.",
+  description: "Transformez vos idées en sites web et applications avec l’IA.",
 };
 
 export default function RootLayout({
@@ -25,7 +20,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr">
-      <body className={`${sans.variable} ${serif.variable} antialiased`}>{children}</body>
+      <body className={`${sans.variable} antialiased`}>{children}</body>
     </html>
   );
 }

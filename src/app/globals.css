@@ -1,14 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f4f1eb;
-  --foreground: #1c1917;
-  --card: #fffcf7;
-  --line: #e4ddd3;
-  --muted: #6b645c;
-  --accent: #1f4e46;
-  --accent-soft: #e4eeec;
-  --danger: #8a2f2f;
+  --background: #f5f7ff;
+  --foreground: #0b1220;
+  --card: #ffffff;
+  --line: #e4e9f4;
+  --muted: #5b6578;
+  --accent: #111827;
+  --accent-soft: #eef2ff;
+  --brand: #4f46e5;
+  --brand-soft: #e0e7ff;
+  --danger: #b42318;
 }
 
 @theme inline {
@@ -19,9 +21,10 @@
   --color-muted: var(--muted);
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
   --color-danger: var(--danger);
   --font-sans: var(--font-sans-actual);
-  --font-serif: var(--font-serif-actual);
 }
 
 * {
@@ -34,11 +37,14 @@ body {
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, #e0e7ff 0%, transparent 55%),
+    radial-gradient(900px 500px at 90% 0%, #dbeafe 0%, transparent 50%),
+    var(--background);
   color: var(--foreground);
   font-family: var(--font-sans-actual), "Segoe UI", sans-serif;
 }
 
 ::selection {
-  background: var(--accent-soft);
+  background: var(--brand-soft);
 }
