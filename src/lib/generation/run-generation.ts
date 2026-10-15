@@ -1,5 +1,6 @@
 import { promptSchema, validateGenerationResult } from "@/lib/ai/schema";
 import type { AIProvider } from "@/lib/ai/provider";
+import { isBinaryFilePath } from "@/lib/media/files";
 import { RateLimitError } from "@/lib/rate-limit";
 import type { Repository } from "@/lib/store/repository";
 
@@ -22,22 +23,31 @@ export async function runGeneration(options: {
     content: prompt,
   });
 
+  const media = bundle.files.filter((file) => isBinaryFilePath(file.path));
   const result = validateGenerationResult(
     await options.provider.generate({
       prompt,
       projectName: bundle.project.name,
       projectDescription: bundle.project.description,
-      existingFiles: bundle.files.map((file) => ({ path: file.path, content: file.content })),
+      existingFiles: bundle.files
+        .filter((file) => !isBinaryFilePath(file.path))
+        .map((file) => ({ path: file.path, content: file.content })),
+      mediaPaths: media.map((file) => file.path),
       recentMessages: bundle.messages
         .filter((message) => message.role === "user" || message.role === "assistant")
         .map((message) => ({ role: message.role as "user" | "assistant", content: message.content })),
     }),
   );
 
+  const unique = new Map(result.files.map((file) => [file.path, file]));
+  for (const file of media) {
+    unique.set(file.path, { path: file.path, content: file.content });
+  }
+
   const applied = await options.repository.replaceFiles(
     options.ownerId,
     options.projectId,
-    result.files,
+    [...unique.values()],
     result.summary.slice(0, 80),
   );
 

@@ -1,5 +1,6 @@
 import type { AIProvider, GenerateProjectInput } from "@/lib/ai/provider";
 import { validateGenerationResult, type GenerationResult } from "@/lib/ai/schema";
+import { PIXEL_PNG_BASE64 } from "@/lib/media/files";
 
 function escapeHtml(value: string): string {
   return value
@@ -25,6 +26,7 @@ function sampleSite(input: GenerateProjectInput): GenerationResult {
   ${nav}
   <header class="hero">
     <p class="eyebrow">Projet généré par Capitune</p>
+    <p><img src="images/mark.png" width="48" height="48" alt="" /></p>
     <h1>${title}</h1>
     <p class="lead">${escapeHtml(input.projectDescription || "Site d’exemple déterministe.")}</p>
   </header>
@@ -122,6 +124,7 @@ Mode démonstration: sortie déterministe sans appel à un modèle IA.
       { path: "contact.html", content: contact },
       { path: "styles.css", content: css },
       { path: "README.md", content: readme },
+      { path: "images/mark.png", content: PIXEL_PNG_BASE64 },
     ],
   });
 }

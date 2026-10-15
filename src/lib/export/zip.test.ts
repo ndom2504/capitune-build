@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildProjectExportArchive } from "@/lib/export/project-archive";
 import { createZipArchive } from "@/lib/export/zip";
+import { PIXEL_PNG_BASE64 } from "@/lib/media/files";
 
 describe("export", () => {
   it("builds a zip containing generated files and a Capitune readme", () => {
@@ -20,6 +21,13 @@ describe("export", () => {
           projectId: "prj_1",
           path: "index.html",
           content: "<h1>Studio</h1>",
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: "f2",
+          projectId: "prj_1",
+          path: "images/mark.png",
+          content: PIXEL_PNG_BASE64,
           updatedAt: new Date().toISOString(),
         },
       ],

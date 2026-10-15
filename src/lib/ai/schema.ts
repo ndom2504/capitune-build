@@ -3,8 +3,10 @@ import {
   MAX_FILE_BYTES,
   MAX_FILES_PER_GENERATION,
   MAX_PROMPT_LENGTH,
+  MAX_TOTAL_BYTES,
   MIN_PROMPT_LENGTH,
 } from "@/lib/constants";
+import { fileBytes, maxBytesForPath } from "@/lib/media/files";
 import { validateProjectPath } from "@/lib/projects/paths";
 
 export const promptSchema = z
@@ -58,15 +60,20 @@ export function validateGenerationResult(input: unknown): GenerationResult {
       throw new Error(`Fichier dupliqué: ${pathResult.path}`);
     }
     seen.add(pathResult.path);
-    const bytes = Buffer.byteLength(file.content, "utf8");
-    if (bytes > MAX_FILE_BYTES) {
+    let bytes: number;
+    try {
+      bytes = fileBytes(pathResult.path, file.content).length;
+    } catch {
+      throw new Error(`Fichier illisible: ${pathResult.path}`);
+    }
+    if (bytes > maxBytesForPath(pathResult.path)) {
       throw new Error(`Fichier trop volumineux: ${pathResult.path}`);
     }
     total += bytes;
     return { path: pathResult.path, content: file.content };
   });
 
-  if (total > 1_500_000) {
+  if (total > MAX_TOTAL_BYTES) {
     throw new Error("Volume total des fichiers trop élevé.");
   }
 

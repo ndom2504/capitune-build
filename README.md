@@ -2,7 +2,7 @@
 
 Capitune génère des sites web à partir d’instructions en langage naturel. Ce dépôt est le code de la **plateforme**, distinct des fichiers générés pour chaque projet utilisateur.
 
-## État du jalon 15
+## État du jalon 17
 
 Application Next.js avec :
 
@@ -15,6 +15,8 @@ Application Next.js avec :
 - quota IA persisté par compte (8 / 10 min) ; `0003_quota.sql` sur Supabase (sinon repli mémoire + bannière)
 - aperçu **signé** `/p/[jeton]/…` (pas de session) ; origine dédiée optionnelle `NEXT_PUBLIC_PREVIEW_ORIGIN`
 - aperçu HTML/CSS sandboxé, versions récupérables, export ZIP
+- **médias** : PNG/JPG/WebP/GIF dans `images/`, conservés entre générations, ZIP binaire
+- **plans** : Gratuit (8 gén./10 min) et Pro (40) ; Stripe Checkout optionnel ; `0004_plan.sql` sur Supabase
 - ownership vérifié côté serveur ; RLS activé sur le schéma Supabase
 
 ## Prérequis
@@ -59,6 +61,7 @@ Voir `.env.example`.
 | `DATA_STORE` | `local` (défaut) ou `supabase` |
 | `NEXT_PUBLIC_SITE_URL` | URL canonique de l’app (OAuth) |
 | `NEXT_PUBLIC_PREVIEW_ORIGIN` | Optionnel. Hôte d’aperçu isolé (ex. `https://preview.capitune.com`) |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRICE_PRO` | Optionnel. Paiement Pro |
 | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Projet Supabase (client + refresh de session) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Serveur uniquement, jamais `NEXT_PUBLIC_` |
 

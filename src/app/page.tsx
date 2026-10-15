@@ -4,6 +4,7 @@ import { LandingHeader } from "@/components/landing-header";
 import { LandingProductPreview } from "@/components/landing-product-preview";
 import { getCurrentUser } from "@/lib/auth/server";
 import { isGoogleProviderAuthCode } from "@/lib/auth/redirect";
+import { isStripeConfigured } from "@/lib/billing/stripe";
 import { t, type MessageKey } from "@/lib/i18n/messages";
 
 const FEATURES: { icon: "chat" | "code" | "preview" | "projects" | "export" | "publish"; title: MessageKey; body: MessageKey }[] = [
@@ -34,6 +35,7 @@ export default async function HomePage({
 
   const user = await getCurrentUser();
   const ctaHref = user ? "/dashboard" : "/signup";
+  const stripeReady = isStripeConfigured();
 
   return (
     <div className="min-h-screen">
@@ -113,22 +115,30 @@ export default async function HomePage({
             <p className="mx-auto mt-3 max-w-2xl text-center text-muted">{t("pricingLead")}</p>
             <div className="mx-auto mt-12 grid max-w-4xl gap-4 md:grid-cols-3">
               {[
-                { name: t("planFree"), body: t("planFreeBody"), cta: true },
-                { name: t("planPro"), body: t("planProBody"), cta: false },
-                { name: t("planStudio"), body: t("planStudioBody"), cta: false },
+                { name: t("planFree"), price: t("planFreePrice"), body: t("planFreeBody"), kind: "free" as const },
+                { name: t("planPro"), price: t("planProPrice"), body: t("planProBody"), kind: "pro" as const },
+                { name: t("planStudio"), price: t("soon"), body: t("planStudioBody"), kind: "studio" as const },
               ].map((plan) => (
                 <article key={plan.name} className="rounded-3xl border bg-white p-6">
                   <h3 className="text-lg font-bold">{plan.name}</h3>
+                  <p className="mt-1 text-2xl font-extrabold tracking-tight">{plan.price}</p>
                   <p className="mt-2 text-sm text-muted">{plan.body}</p>
-                  {plan.cta ? (
+                  {plan.kind === "free" ? (
                     <Link
                       href={ctaHref}
                       className="mt-6 inline-flex rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white"
                     >
                       {t("startFree")}
                     </Link>
+                  ) : plan.kind === "pro" && stripeReady ? (
+                    <Link
+                      href={user ? "/dashboard" : "/signup"}
+                      className="mt-6 inline-flex rounded-full border px-4 py-2 text-sm font-semibold"
+                    >
+                      {t("upgradePro")}
+                    </Link>
                   ) : (
-                    <p className="mt-6 text-sm font-medium text-muted">Bientôt</p>
+                    <p className="mt-6 text-sm font-medium text-muted">{t("soon")}</p>
                   )}
                 </article>
               ))}

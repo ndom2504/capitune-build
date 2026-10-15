@@ -7,6 +7,7 @@ describe("preview", () => {
     expect(previewContentType("styles.css")).toContain("text/css");
     const headers = previewSecurityHeaders();
     expect(headers["Content-Security-Policy"]).toContain("default-src 'none'");
+    expect(headers["Content-Security-Policy"]).toContain("img-src 'self'");
     expect(headers["Content-Security-Policy"]).toContain("style-src 'self'");
     expect(headers["Content-Security-Policy"]).toContain("connect-src 'none'");
     expect(headers["Content-Security-Policy"]).toContain("frame-ancestors 'self'");

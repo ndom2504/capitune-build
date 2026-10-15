@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AppRail } from "@/components/app-rail";
 import type { ProjectBundle } from "@/lib/domain";
 import { t } from "@/lib/i18n/messages";
+import { isBinaryFilePath } from "@/lib/media/paths";
 import { previewPageUrl } from "@/lib/preview/url";
 import { isPublishSlug, slugify } from "@/lib/publish/slug";
 import { publicSitePath } from "@/lib/publish/url";
@@ -232,6 +233,23 @@ export function WorkspaceClient({
       setPreviewPage(path);
       setTab("preview");
     }
+  }
+
+  async function uploadMedia(fileList: FileList | null) {
+    const file = fileList?.[0];
+    if (!file) return;
+    setSaving(true);
+    setError(null);
+    const body = new FormData();
+    body.append("file", file);
+    const response = await fetch(`/api/projects/${bundle.project.id}/media`, { method: "POST", body });
+    const payload = await response.json();
+    setSaving(false);
+    if (!response.ok) {
+      setError(payload.error || "Import d’image impossible.");
+      return;
+    }
+    await refreshBundle();
   }
 
   async function copyPublicLink() {
@@ -582,6 +600,16 @@ export function WorkspaceClient({
                   </div>
                   <div className="flex-1 overflow-auto p-4">
                     <p className="text-sm font-medium">{t("files")}</p>
+                    <label className="mt-3 flex cursor-pointer justify-center rounded-full border px-4 py-2 text-sm font-medium">
+                      {t("uploadImage")}
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/gif,image/x-icon"
+                        className="hidden"
+                        onChange={(event) => void uploadMedia(event.target.files)}
+                      />
+                    </label>
+                    <p className="mt-1 text-xs text-muted">{t("mediaHint")}</p>
                     <ul className="mt-2 space-y-1 text-sm">
                       {bundle.files.map((file) => (
                         <li key={file.id}>
@@ -596,6 +624,16 @@ export function WorkspaceClient({
                       ))}
                     </ul>
                     {selected ? (
+                      isBinaryFilePath(selected.path) ? (
+                        <div className="mt-3 space-y-2">
+                          <img
+                            src={previewPageUrl(previewToken, selected.path, previewKey)}
+                            alt={selected.path}
+                            className="max-h-48 rounded-2xl border bg-slate-50 object-contain p-2"
+                          />
+                          <p className="text-xs text-muted">{t("binaryFile")}</p>
+                        </div>
+                      ) : (
                       <>
                         <textarea
                           value={draft}
@@ -612,6 +650,7 @@ export function WorkspaceClient({
                           {saving ? "…" : dirty ? t("saveFile") : t("saved")}
                         </button>
                       </>
+                      )
                     ) : null}
                   </div>
                 </div>

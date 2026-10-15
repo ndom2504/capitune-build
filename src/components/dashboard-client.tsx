@@ -4,14 +4,21 @@ import { useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Project } from "@/lib/domain";
 import { t } from "@/lib/i18n/messages";
+import type { GenerationUsage } from "@/lib/store/repository";
 import { publicSitePath } from "@/lib/publish/url";
 
 export function DashboardClient({
   initialProjects,
   publishReady = true,
+  usage,
+  stripeEnabled = false,
+  billingNotice = null,
 }: {
   initialProjects: Project[];
   publishReady?: boolean;
+  usage: GenerationUsage;
+  stripeEnabled?: boolean;
+  billingNotice?: "success" | "cancel" | null;
 }) {
   const router = useRouter();
   const [projects, setProjects] = useState(initialProjects);
@@ -23,6 +30,7 @@ export function DashboardClient({
   const [creating, setCreating] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [publishBusy, setPublishBusy] = useState<string | null>(null);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
 
   const empty = useMemo(() => projects.length === 0, [projects.length]);
 
@@ -107,8 +115,49 @@ export function DashboardClient({
     }
   }
 
+  async function startCheckout() {
+    setCheckoutBusy(true);
+    setError(null);
+    const response = await fetch("/api/billing/checkout", { method: "POST" });
+    const payload = await response.json();
+    setCheckoutBusy(false);
+    if (!response.ok) {
+      setError(payload.error || t("billingUnconfigured"));
+      return;
+    }
+    if (payload.url) {
+      window.location.href = payload.url as string;
+    }
+  }
+
   return (
     <div className="space-y-8">
+      {billingNotice === "success" ? (
+        <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{t("billingSuccess")}</p>
+      ) : null}
+      {billingNotice === "cancel" ? (
+        <p className="rounded-2xl bg-brand-soft px-4 py-3 text-sm">{t("billingCancel")}</p>
+      ) : null}
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border bg-white px-5 py-4">
+        <div>
+          <p className="text-sm font-semibold">{usage.plan === "pro" ? t("planPro") : t("planFree")}</p>
+          <p className="text-sm text-muted">
+            {t("planUsage")} : {usage.used}/{usage.max}
+          </p>
+        </div>
+        {usage.plan === "pro" ? null : stripeEnabled ? (
+          <button
+            type="button"
+            disabled={checkoutBusy}
+            onClick={() => void startCheckout()}
+            className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+          >
+            {checkoutBusy ? "…" : t("upgradePro")}
+          </button>
+        ) : (
+          <p className="text-sm text-muted">{t("billingUnconfigured")}</p>
+        )}
+      </section>
       <form onSubmit={createProject} className="rounded-3xl border bg-white p-6 shadow-[0_16px_40px_-28px_rgba(15,23,42,0.35)]">
         <h2 className="text-lg font-bold">{t("newProject")}</h2>
         <p className="mt-1 text-sm text-muted">{t("newProjectHint")}</p>

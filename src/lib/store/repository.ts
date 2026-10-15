@@ -1,3 +1,4 @@
+import type { PlanId } from "@/lib/billing/plans";
 import type {
   Conversation,
   Message,
@@ -38,6 +39,22 @@ export class SlugTakenError extends Error {
     this.name = "SlugTakenError";
   }
 }
+
+export class BillingSchemaError extends Error {
+  constructor(
+    message = "Le plan de facturation n’est pas prêt. Exécutez supabase/migrations/0004_plan.sql dans le SQL Editor Supabase.",
+  ) {
+    super(message);
+    this.name = "BillingSchemaError";
+  }
+}
+
+export type GenerationUsage = {
+  plan: PlanId;
+  used: number;
+  max: number;
+  resetAt: number;
+};
 
 export type CreateUserInput = {
   id?: string;
@@ -93,4 +110,12 @@ export interface Repository {
     ownerId: string,
   ): Promise<{ ok: true } | { ok: false; retryAfterMs: number }>;
   quotaSchemaReady(): Promise<boolean>;
+  getGenerationUsage(ownerId: string): Promise<GenerationUsage>;
+  setUserPlan(
+    ownerId: string,
+    plan: PlanId,
+    stripeCustomerId?: string | null,
+  ): Promise<Profile>;
+  findUserByStripeCustomerId(customerId: string): Promise<Profile | null>;
+  billingSchemaReady(): Promise<boolean>;
 }

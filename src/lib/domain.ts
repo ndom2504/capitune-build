@@ -1,7 +1,11 @@
+import type { PlanId } from "@/lib/billing/plans";
+
 export type Profile = {
   id: string;
   email: string;
   displayName: string;
+  plan: PlanId;
+  stripeCustomerId: string | null;
   createdAt: string;
 };
 

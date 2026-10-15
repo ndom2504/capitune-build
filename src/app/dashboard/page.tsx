@@ -4,19 +4,27 @@ import { DashboardClient } from "@/components/dashboard-client";
 import { getCurrentUser } from "@/lib/auth/server";
 import { t } from "@/lib/i18n/messages";
 import { isDemoAI } from "@/lib/ai";
+import { isStripeConfigured } from "@/lib/billing/stripe";
 import { getEnvStatus } from "@/lib/env/status";
 import { getRepository } from "@/lib/store";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const user = await getCurrentUser();
   if (!user) {
     redirect("/login");
   }
+  const query = await searchParams;
   const repository = await getRepository();
   const projects = await repository.listProjects(user.id);
+  const usage = await repository.getGenerationUsage(user.id);
   const env = getEnvStatus();
   let publishReady = true;
   let quotaReady = true;
+  let billingReady = true;
   try {
     publishReady = await repository.publishSchemaReady();
   } catch {
@@ -27,6 +35,12 @@ export default async function DashboardPage() {
   } catch {
     quotaReady = false;
   }
+  try {
+    billingReady = await repository.billingSchemaReady();
+  } catch {
+    billingReady = false;
+  }
+  const billingNotice = query.billing === "success" ? "success" : query.billing === "cancel" ? "cancel" : null;
 
   return (
     <div className="flex min-h-screen">
@@ -53,8 +67,17 @@ export default async function DashboardPage() {
           {env.mode === "supabase" && !quotaReady ? (
             <p className="mt-3 max-w-2xl rounded-2xl bg-brand-soft px-4 py-3 text-sm">{t("quotaSchemaMissing")}</p>
           ) : null}
+          {env.mode === "supabase" && !billingReady ? (
+            <p className="mt-3 max-w-2xl rounded-2xl bg-brand-soft px-4 py-3 text-sm">{t("billingSchemaMissing")}</p>
+          ) : null}
           <div className="mt-8">
-            <DashboardClient initialProjects={projects} publishReady={publishReady} />
+            <DashboardClient
+              initialProjects={projects}
+              publishReady={publishReady}
+              usage={usage}
+              stripeEnabled={isStripeConfigured()}
+              billingNotice={billingNotice}
+            />
           </div>
         </main>
       </div>

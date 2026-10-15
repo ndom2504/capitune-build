@@ -3,8 +3,11 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { demoProvider } from "@/lib/ai/demo-provider";
+import type { AIProvider } from "@/lib/ai/provider";
+import { validateGenerationResult } from "@/lib/ai/schema";
 import { runGeneration } from "@/lib/generation/run-generation";
-import { saveProjectFile } from "@/lib/generation/save-files";
+import { saveProjectFile, saveProjectMedia } from "@/lib/generation/save-files";
+import { PIXEL_PNG_BASE64 } from "@/lib/media/files";
 import { hashPassword } from "@/lib/auth/password";
 import { resetRateLimitForTests } from "@/lib/rate-limit";
 import { createLocalRepository } from "@/lib/store/local-repository";
@@ -51,6 +54,7 @@ describe("generation and ownership", () => {
     });
     expect(result.demoMode).toBe(true);
     expect(result.files.length).toBeGreaterThan(0);
+    expect(result.files.some((file) => file.path === "images/mark.png")).toBe(true);
     const bundle = await repository.getProject(owner.id, projectId);
     expect(bundle.versions).toHaveLength(1);
     expect(bundle.messages.some((message) => message.role === "user")).toBe(true);
@@ -102,6 +106,56 @@ describe("generation and ownership", () => {
   it("persists generation quota per owner", async () => {
     const { repository, owner } = await setup();
     for (let i = 0; i < 8; i += 1) {
+      await expect(repository.consumeGenerationLimit(owner.id)).resolves.toEqual({ ok: true });
+    }
+    const blocked = await repository.consumeGenerationLimit(owner.id);
+    expect(blocked.ok).toBe(false);
+  });
+
+  it("keeps uploaded images when the model omits them", async () => {
+    const { repository, owner, projectId } = await setup();
+    await runGeneration({
+      repository,
+      provider: demoProvider,
+      ownerId: owner.id,
+      projectId,
+      prompt: "Une page d’accueil artisanale",
+    });
+    await saveProjectMedia({
+      repository,
+      ownerId: owner.id,
+      projectId,
+      path: "images/extra.png",
+      content: PIXEL_PNG_BASE64,
+    });
+    const stub: AIProvider = {
+      id: "stub",
+      demoMode: true,
+      async generate() {
+        return validateGenerationResult({
+          summary: "Texte seulement",
+          files: [
+            { path: "index.html", content: "<h1>New</h1>" },
+            { path: "styles.css", content: "body{margin:0}" },
+          ],
+        });
+      },
+    };
+    const next = await runGeneration({
+      repository,
+      provider: stub,
+      ownerId: owner.id,
+      projectId,
+      prompt: "Change le titre",
+    });
+    expect(next.files.some((file) => file.path === "images/extra.png")).toBe(true);
+    expect(next.files.some((file) => file.path === "images/mark.png")).toBe(true);
+  });
+
+  it("raises the cap on the pro plan", async () => {
+    const { repository, owner } = await setup();
+    await repository.setUserPlan(owner.id, "pro");
+    for (let i = 0; i < 40; i += 1) {
       await expect(repository.consumeGenerationLimit(owner.id)).resolves.toEqual({ ok: true });
     }
     const blocked = await repository.consumeGenerationLimit(owner.id);

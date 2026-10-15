@@ -21,8 +21,8 @@ export function tickQuota(
   current: QuotaTick | undefined,
   ownerId: string,
   now = Date.now(),
-  max = GENERATION_RATE_LIMIT.max,
-  windowMs = GENERATION_RATE_LIMIT.windowMs,
+  max: number = GENERATION_RATE_LIMIT.max,
+  windowMs: number = GENERATION_RATE_LIMIT.windowMs,
 ): { next: QuotaTick; ok: true } | { next: QuotaTick; ok: false; retryAfterMs: number } {
   if (!current || current.resetAt <= now) {
     const next = { ownerId, count: 1, resetAt: now + windowMs };
@@ -34,13 +34,17 @@ export function tickQuota(
   return { next: { ...current, count: current.count + 1 }, ok: true };
 }
 
-export function consumeMemoryRateLimit(key: string): { ok: true } | { ok: false; retryAfterMs: number } {
+export function consumeMemoryRateLimit(
+  key: string,
+  max: number = GENERATION_RATE_LIMIT.max,
+): { ok: true } | { ok: false; retryAfterMs: number } {
   const now = Date.now();
   const current = buckets.get(key);
   const ticked = tickQuota(
     current ? { ownerId: key, count: current.count, resetAt: current.resetAt } : undefined,
     key,
     now,
+    max,
   );
   buckets.set(key, { count: ticked.next.count, resetAt: ticked.next.resetAt });
   if (!ticked.ok) return { ok: false, retryAfterMs: ticked.retryAfterMs };

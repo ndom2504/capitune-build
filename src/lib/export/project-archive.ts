@@ -1,8 +1,12 @@
 import { createZipArchive } from "@/lib/export/zip";
 import type { Project, ProjectFile } from "@/lib/domain";
+import { fileBytes, isBinaryFilePath } from "@/lib/media/files";
 
 export function buildProjectExportArchive(project: Project, files: ProjectFile[]): Buffer {
-  const entries = files.map((file) => ({ path: file.path, content: file.content }));
+  const entries = files.map((file) => ({
+    path: file.path,
+    content: isBinaryFilePath(file.path) ? fileBytes(file.path, file.content) : file.content,
+  }));
   entries.push({
     path: "CAPITUNE.md",
     content: `# ${project.name}

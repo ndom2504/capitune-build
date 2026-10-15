@@ -5,6 +5,7 @@ export type GenerateProjectInput = {
   projectName: string;
   projectDescription: string;
   existingFiles: GeneratedFile[];
+  mediaPaths?: string[];
   recentMessages: { role: "user" | "assistant"; content: string }[];
 };
 

@@ -1,3 +1,4 @@
+import { normalizePlan } from "@/lib/billing/plans";
 import type {
   Conversation,
   Message,
@@ -13,6 +14,8 @@ export type ProfileRow = {
   id: string;
   email: string;
   display_name: string;
+  plan?: string | null;
+  stripe_customer_id?: string | null;
   created_at: string;
 };
 
@@ -75,6 +78,8 @@ export function mapProfile(row: ProfileRow): Profile {
     id: row.id,
     email: row.email,
     displayName: row.display_name,
+    plan: normalizePlan(row.plan),
+    stripeCustomerId: row.stripe_customer_id ?? null,
     createdAt: row.created_at,
   };
 }

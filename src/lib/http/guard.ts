@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { RateLimitError } from "@/lib/rate-limit";
-import { OwnershipError, NotFoundError, PublishSchemaError, SlugTakenError } from "@/lib/store/repository";
+import {
+  OwnershipError,
+  NotFoundError,
+  PublishSchemaError,
+  SlugTakenError,
+  BillingSchemaError,
+} from "@/lib/store/repository";
 import { ZodError } from "zod";
 
 export function errorResponse(error: unknown): NextResponse {
@@ -18,6 +24,9 @@ export function errorResponse(error: unknown): NextResponse {
   }
   if (error instanceof SlugTakenError) {
     return NextResponse.json({ error: error.message, code: "SLUG_TAKEN" }, { status: 409 });
+  }
+  if (error instanceof BillingSchemaError) {
+    return NextResponse.json({ error: error.message, code: "BILLING_SCHEMA" }, { status: 503 });
   }
   if (error instanceof RateLimitError) {
     return NextResponse.json(

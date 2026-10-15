@@ -23,10 +23,13 @@ import {
   type VersionFileRow,
   type VersionRow,
 } from "@/lib/store/mappers";
+import { isMissingPlanColumn } from "@/lib/billing/ready";
+import { generationMaxForPlan, normalizePlan } from "@/lib/billing/plans";
 import { GENERATION_RATE_LIMIT } from "@/lib/constants";
 import { consumeMemoryRateLimit } from "@/lib/rate-limit";
 import { isMissingPublishColumn } from "@/lib/publish/ready";
 import {
+  BillingSchemaError,
   NotFoundError,
   OwnershipError,
   PublishSchemaError,
@@ -346,9 +349,11 @@ export function createSupabaseRepository(admin: SupabaseClient): Repository {
     },
 
     async consumeGenerationLimit(ownerId) {
+      const profile = await this.findUserById(ownerId);
+      const max = generationMaxForPlan(normalizePlan(profile?.plan));
       const { data, error } = await admin.rpc("consume_generation_quota", {
         p_owner_id: ownerId,
-        p_max: GENERATION_RATE_LIMIT.max,
+        p_max: max,
         p_window_seconds: Math.round(GENERATION_RATE_LIMIT.windowMs / 1000),
       });
       if (error) {
@@ -356,7 +361,7 @@ export function createSupabaseRepository(admin: SupabaseClient): Repository {
           error.message.toLowerCase().includes("consume_generation_quota") ||
           error.message.toLowerCase().includes("generation_quotas")
         ) {
-          return consumeMemoryRateLimit(`gen:${ownerId}`);
+          return consumeMemoryRateLimit(`gen:${ownerId}`, max);
         }
         throw new Error(error.message);
       }
@@ -374,6 +379,65 @@ export function createSupabaseRepository(admin: SupabaseClient): Repository {
       ) {
         return false;
       }
+      throw new Error(error.message);
+    },
+
+    async getGenerationUsage(ownerId) {
+      const profile = await this.findUserById(ownerId);
+      const plan = normalizePlan(profile?.plan);
+      const max = generationMaxForPlan(plan);
+      const { data, error } = await admin
+        .from("generation_quotas")
+        .select("count, window_started_at")
+        .eq("owner_id", ownerId)
+        .maybeSingle();
+      const now = Date.now();
+      const fallback = { plan, used: 0, max, resetAt: now + GENERATION_RATE_LIMIT.windowMs };
+      if (error) {
+        if (
+          error.message.toLowerCase().includes("generation_quotas") ||
+          error.message.toLowerCase().includes("does not exist")
+        ) {
+          return fallback;
+        }
+        throw new Error(error.message);
+      }
+      if (!data) return fallback;
+      const started = new Date(String((data as { window_started_at: string }).window_started_at)).getTime();
+      const resetAt = started + GENERATION_RATE_LIMIT.windowMs;
+      if (!Number.isFinite(started) || resetAt <= now) return fallback;
+      return { plan, used: Number((data as { count: number }).count) || 0, max, resetAt };
+    },
+
+    async setUserPlan(ownerId, plan, stripeCustomerId) {
+      const patch: Record<string, unknown> = { plan };
+      if (stripeCustomerId !== undefined) patch.stripe_customer_id = stripeCustomerId;
+      const { data, error } = await admin.from("profiles").update(patch).eq("id", ownerId).select("*").single();
+      if (error) {
+        if (isMissingPlanColumn(error.message)) throw new BillingSchemaError();
+        throw new Error(error.message);
+      }
+      return mapProfile(data as ProfileRow);
+    },
+
+    async findUserByStripeCustomerId(customerId) {
+      const { data, error } = await admin
+        .from("profiles")
+        .select("*")
+        .eq("stripe_customer_id", customerId)
+        .maybeSingle();
+      if (error) {
+        if (isMissingPlanColumn(error.message)) return null;
+        throw new Error(error.message);
+      }
+      if (!data) return null;
+      return mapProfile(data as ProfileRow);
+    },
+
+    async billingSchemaReady() {
+      const { error } = await admin.from("profiles").select("plan").limit(1);
+      if (!error) return true;
+      if (isMissingPlanColumn(error.message)) return false;
       throw new Error(error.message);
     },
   };

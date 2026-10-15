@@ -21,14 +21,14 @@ function u32(value: number): Buffer {
   return buffer;
 }
 
-export function createZipArchive(files: { path: string; content: string }[]): Buffer {
+export function createZipArchive(files: { path: string; content: string | Buffer }[]): Buffer {
   const locals: Buffer[] = [];
   const centrals: Buffer[] = [];
   let offset = 0;
 
   for (const file of files) {
     const name = Buffer.from(file.path, "utf8");
-    const data = Buffer.from(file.content, "utf8");
+    const data = Buffer.isBuffer(file.content) ? file.content : Buffer.from(file.content, "utf8");
     const crc = crc32(data);
     const local = Buffer.concat([
       u32(0x04034b50),

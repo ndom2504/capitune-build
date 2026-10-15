@@ -5,8 +5,11 @@ export const SESSION_COOKIE = "capitune_session";
 export const MAX_PROMPT_LENGTH = 4_000;
 export const MIN_PROMPT_LENGTH = 3;
 export const MAX_FILES_PER_GENERATION = 40;
-export const MAX_FILE_BYTES = 200_000;
-export const MAX_TOTAL_BYTES = 1_500_000;
+export const MAX_TEXT_FILE_BYTES = 200_000;
+export const MAX_MEDIA_FILE_BYTES = 1_000_000;
+export const MAX_MEDIA_FILES = 16;
+export const MAX_FILE_BYTES = MAX_MEDIA_FILE_BYTES;
+export const MAX_TOTAL_BYTES = 4_000_000;
 
 export const ALLOWED_FILE_EXTENSIONS = [
   "html",
@@ -17,6 +20,11 @@ export const ALLOWED_FILE_EXTENSIONS = [
   "svg",
   "txt",
   "ico",
+  "png",
+  "jpg",
+  "jpeg",
+  "webp",
+  "gif",
 ] as const;
 
 export const GENERATION_RATE_LIMIT = {

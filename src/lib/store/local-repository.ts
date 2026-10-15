@@ -10,6 +10,8 @@ import type {
   ProjectVersion,
   VersionFile,
 } from "@/lib/domain";
+import { generationMaxForPlan, normalizePlan } from "@/lib/billing/plans";
+import { GENERATION_RATE_LIMIT } from "@/lib/constants";
 import { tickQuota } from "@/lib/rate-limit";
 import { emptyState, type StoreState } from "@/lib/store/memory-state";
 import {
@@ -23,6 +25,17 @@ import {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function toProfile(user: StoredUser): Profile {
+  return {
+    id: user.id,
+    email: user.email,
+    displayName: user.displayName,
+    plan: normalizePlan(user.plan),
+    stripeCustomerId: user.stripeCustomerId ?? null,
+    createdAt: user.createdAt,
+  };
 }
 
 function id(prefix: string): string {
@@ -97,16 +110,13 @@ export function createLocalRepository(filePath: string): Repository {
           id: id("usr"),
           email: input.email.toLowerCase(),
           displayName: input.displayName,
+          plan: "free",
+          stripeCustomerId: null,
           passwordHash: input.passwordHash || "",
           createdAt: nowIso(),
         };
         state.users.push(user);
-        return {
-          id: user.id,
-          email: user.email,
-          displayName: user.displayName,
-          createdAt: user.createdAt,
-        };
+        return toProfile(user);
       });
     },
 
@@ -119,12 +129,7 @@ export function createLocalRepository(filePath: string): Repository {
       const state = await load();
       const user = state.users.find((item) => item.id === userId);
       if (!user) return null;
-      return {
-        id: user.id,
-        email: user.email,
-        displayName: user.displayName,
-        createdAt: user.createdAt,
-      };
+      return toProfile(user);
     },
 
     async listProjects(ownerId: string): Promise<Project[]> {
@@ -341,8 +346,10 @@ export function createLocalRepository(filePath: string): Repository {
     async consumeGenerationLimit(ownerId) {
       return mutate((state) => {
         if (!state.quotas) state.quotas = [];
+        const user = state.users.find((item) => item.id === ownerId);
+        const max = generationMaxForPlan(normalizePlan(user?.plan));
         const current = state.quotas.find((item) => item.ownerId === ownerId);
-        const ticked = tickQuota(current, ownerId);
+        const ticked = tickQuota(current, ownerId, Date.now(), max);
         state.quotas = state.quotas.filter((item) => item.ownerId !== ownerId);
         state.quotas.push(ticked.next);
         if (!ticked.ok) return { ok: false as const, retryAfterMs: ticked.retryAfterMs };
@@ -351,6 +358,39 @@ export function createLocalRepository(filePath: string): Repository {
     },
 
     async quotaSchemaReady() {
+      return true;
+    },
+
+    async getGenerationUsage(ownerId) {
+      const state = await load();
+      const user = state.users.find((item) => item.id === ownerId);
+      const plan = normalizePlan(user?.plan);
+      const max = generationMaxForPlan(plan);
+      const current = (state.quotas ?? []).find((item) => item.ownerId === ownerId);
+      const now = Date.now();
+      if (!current || current.resetAt <= now) {
+        return { plan, used: 0, max, resetAt: now + GENERATION_RATE_LIMIT.windowMs };
+      }
+      return { plan, used: current.count, max, resetAt: current.resetAt };
+    },
+
+    async setUserPlan(ownerId, plan, stripeCustomerId) {
+      return mutate((state) => {
+        const user = state.users.find((item) => item.id === ownerId);
+        if (!user) throw new NotFoundError("Compte introuvable.");
+        user.plan = plan;
+        if (stripeCustomerId !== undefined) user.stripeCustomerId = stripeCustomerId;
+        return toProfile(user);
+      });
+    },
+
+    async findUserByStripeCustomerId(customerId) {
+      const state = await load();
+      const user = state.users.find((item) => item.stripeCustomerId === customerId);
+      return user ? toProfile(user) : null;
+    },
+
+    async billingSchemaReady() {
       return true;
     },
   };

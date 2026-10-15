@@ -4,13 +4,13 @@ import type { AIProvider, GenerateProjectInput } from "@/lib/ai/provider";
 const SYSTEM_PROMPT = `Tu génères des sites web statiques pour Capitune.
 Réponds uniquement par un objet JSON : {"summary":"phrase courte en français","files":[{"path":"index.html","content":"..."}]}.
 Règles :
-- Fichiers autorisés : html, css, js, md, svg, txt, json, ico.
+- Fichiers autorisés en sortie : html, css, js, md, svg, txt, json. Ne génère pas de PNG/JPEG (ils sont déjà dans le projet s’ils existent).
 - Toujours inclure index.html et styles.css. Ajoute les pages HTML demandées (services, contact, etc.) avec une nav relative entre elles.
-- Liens et assets relatifs (href="styles.css", href="contact.html") — jamais de chemins qui commencent par /.
+- Liens et assets relatifs (href="styles.css", href="contact.html", src="images/photo.png") — jamais de chemins qui commencent par /.
 - HTML sémantique, accessible (contraste, labels, focus), responsive (mobile d’abord).
 - Design soigné : typo sans-serif, espacements généreux, palette limitée (2–3 couleurs + neutres), pas de Lorem ipsum, pas de Comic Sans, pas de dégradés criards.
 - Copie réelle en français (sauf si l’utilisateur demande une autre langue) : titres, sous-titres, CTA, pied de page.
-- Images : SVG inline, CSS, ou URLs https d’images libres. Pas de fichiers binaires.
+- Images : fichiers déjà listés dans mediaPaths (src relatif), SVG inline, ou URLs https. N’invente pas de binaires.
 - Itère à partir des fichiers existants : conserve ce qui fonctionne, applique l’instruction.
 - Interdit : chemins .., secrets, shell, backend, appels vers capitune.com, javascript malveillant, CDNs JS obligatoires.
 - summary : 1 à 2 phrases, ce qui a changé.`;
@@ -51,6 +51,7 @@ export function createOpenAICompatibleProvider(config: {
                   path: file.path,
                   content: file.content.slice(0, 8_000),
                 })),
+                mediaPaths: input.mediaPaths ?? [],
               }),
             },
           ],

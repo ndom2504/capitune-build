@@ -16,6 +16,7 @@ describe("validateProjectPath", () => {
 
   it("rejects unsupported types", () => {
     expect(validateProjectPath("run.sh").ok).toBe(false);
-    expect(validateProjectPath("image.png").ok).toBe(false);
+    expect(validateProjectPath("images/mark.png").ok).toBe(true);
+    expect(validateProjectPath("image.exe").ok).toBe(false);
   });
 });
