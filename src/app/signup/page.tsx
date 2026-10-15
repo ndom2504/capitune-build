@@ -1,0 +1,25 @@
+import { Suspense } from "react";
+import Link from "next/link";
+import { AuthForm } from "@/components/auth-form";
+import { Brand } from "@/components/brand";
+import { t } from "@/lib/i18n/messages";
+import { isSupabaseEnabled } from "@/lib/supabase/config";
+
+export default function SignupPage() {
+  return (
+    <div className="min-h-screen px-6 py-10">
+      <Brand />
+      <div className="mt-16">
+        <Suspense>
+          <AuthForm mode="signup" googleEnabled={isSupabaseEnabled()} />
+        </Suspense>
+        <p className="mx-auto mt-4 max-w-md text-center text-sm text-muted">
+          Déjà un compte ?{" "}
+          <Link href="/login" className="text-accent underline">
+            {t("login")}
+          </Link>
+        </p>
+      </div>
+    </div>
+  );
+}
