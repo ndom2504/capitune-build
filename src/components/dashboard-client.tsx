@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { canManage } from "@/lib/collab/roles";
 import type { Project } from "@/lib/domain";
@@ -441,21 +442,21 @@ export function DashboardClient({
             ) : (
               <p className="mt-3 text-xs text-muted">{t("billingUnconfigured")}</p>
             )}
-            <a href="/#tarifs" className="mt-3 block text-sm font-medium text-brand">
+            <Link href="/#tarifs" className="mt-3 block text-sm font-medium text-brand">
               {t("seePlanDetails")}
-            </a>
+            </Link>
           </section>
 
           <section className="rounded-[1.5rem] border bg-white p-5">
             <p className="font-semibold">{t("helpTitle")}</p>
-            <a href="/#ressources" className="mt-3 block rounded-2xl bg-slate-50 px-3 py-3">
+            <Link href="/#ressources" className="mt-3 block rounded-2xl bg-slate-50 px-3 py-3">
               <p className="text-sm font-medium">{t("helpDocs")}</p>
               <p className="text-xs text-muted">{t("helpDocsLead")}</p>
-            </a>
-            <a href="/demo" className="mt-2 block rounded-2xl bg-slate-50 px-3 py-3">
+            </Link>
+            <Link href="/demo" className="mt-2 block rounded-2xl bg-slate-50 px-3 py-3">
               <p className="text-sm font-medium">{t("helpDemo")}</p>
               <p className="text-xs text-muted">{t("helpDemoLead")}</p>
-            </a>
+            </Link>
           </section>
 
           <section id="exemples" className="rounded-[1.5rem] border bg-gradient-to-br from-indigo-50 to-white p-5">
