@@ -51,51 +51,53 @@ export default async function DashboardPage({
 
   return (
     <div className="flex min-h-screen">
-      <AppRail />
+      <AppRail variant="dashboard" />
       <div className="min-w-0 flex-1">
-        <header className="flex items-center justify-between px-6 py-5">
-          <p className="text-sm font-extrabold tracking-[0.16em]">CAPITUNE</p>
-          <span className="hidden text-sm text-muted sm:inline">{user.email}</span>
-        </header>
-        <main className="mx-auto max-w-5xl px-6 pb-16">
-          <h1 className="text-4xl font-extrabold tracking-tight">{t("projects")}</h1>
-          <p className="mt-2 text-muted">{t("projectsLead")}</p>
-          {isDemoAI() ? (
-            <p className="mt-4 max-w-2xl rounded-2xl bg-brand-soft px-4 py-3 text-sm">{t("demoModeHint")}</p>
-          ) : null}
-          {env.mode === "supabase" && !env.ready ? (
-            <p className="mt-3 max-w-2xl text-sm text-danger">
-              {t("persistenceSupabaseMissing")} {env.missing.join(", ")}
-            </p>
-          ) : null}
-          {!publishReady ? (
-            <p className="mt-3 max-w-2xl rounded-2xl bg-brand-soft px-4 py-3 text-sm">{t("publishSchemaMissing")}</p>
-          ) : null}
-          {env.mode === "supabase" && !quotaReady ? (
-            <p className="mt-3 max-w-2xl rounded-2xl bg-brand-soft px-4 py-3 text-sm">{t("quotaSchemaMissing")}</p>
-          ) : null}
-          {env.mode === "supabase" && !billingReady ? (
-            <p className="mt-3 max-w-2xl rounded-2xl bg-brand-soft px-4 py-3 text-sm">{t("billingSchemaMissing")}</p>
-          ) : null}
-          {env.mode === "supabase" && !collabReady ? (
-            <p className="mt-3 max-w-2xl rounded-2xl bg-brand-soft px-4 py-3 text-sm">{t("collabSchemaMissing")}</p>
-          ) : null}
-          {collabNotice === "schema" ? (
-            <p className="mt-3 max-w-2xl rounded-2xl bg-brand-soft px-4 py-3 text-sm">{t("collabSchemaMissing")}</p>
-          ) : null}
-          {collabNotice === "invalid" ? (
-            <p className="mt-3 max-w-2xl rounded-2xl bg-brand-soft px-4 py-3 text-sm">{t("collabInvalid")}</p>
-          ) : null}
-          <div className="mt-8">
-            <DashboardClient
-              initialProjects={projects}
-              publishReady={publishReady}
-              usage={usage}
-              stripeEnabled={isStripeConfigured()}
-              billingNotice={billingNotice}
-            />
+        {isDemoAI() ||
+        (env.mode === "supabase" && !env.ready) ||
+        !publishReady ||
+        (env.mode === "supabase" && !quotaReady) ||
+        (env.mode === "supabase" && !billingReady) ||
+        (env.mode === "supabase" && !collabReady) ||
+        collabNotice ? (
+          <div className="space-y-2 px-4 pt-4 lg:px-6">
+            {isDemoAI() ? (
+              <p className="rounded-2xl bg-brand-soft px-4 py-3 text-sm">{t("demoModeHint")}</p>
+            ) : null}
+            {env.mode === "supabase" && !env.ready ? (
+              <p className="text-sm text-danger">
+                {t("persistenceSupabaseMissing")} {env.missing.join(", ")}
+              </p>
+            ) : null}
+            {!publishReady ? (
+              <p className="rounded-2xl bg-brand-soft px-4 py-3 text-sm">{t("publishSchemaMissing")}</p>
+            ) : null}
+            {env.mode === "supabase" && !quotaReady ? (
+              <p className="rounded-2xl bg-brand-soft px-4 py-3 text-sm">{t("quotaSchemaMissing")}</p>
+            ) : null}
+            {env.mode === "supabase" && !billingReady ? (
+              <p className="rounded-2xl bg-brand-soft px-4 py-3 text-sm">{t("billingSchemaMissing")}</p>
+            ) : null}
+            {env.mode === "supabase" && !collabReady ? (
+              <p className="rounded-2xl bg-brand-soft px-4 py-3 text-sm">{t("collabSchemaMissing")}</p>
+            ) : null}
+            {collabNotice === "schema" ? (
+              <p className="rounded-2xl bg-brand-soft px-4 py-3 text-sm">{t("collabSchemaMissing")}</p>
+            ) : null}
+            {collabNotice === "invalid" ? (
+              <p className="rounded-2xl bg-brand-soft px-4 py-3 text-sm">{t("collabInvalid")}</p>
+            ) : null}
           </div>
-        </main>
+        ) : null}
+        <DashboardClient
+          initialProjects={projects}
+          publishReady={publishReady}
+          usage={usage}
+          stripeEnabled={isStripeConfigured()}
+          billingNotice={billingNotice}
+          displayName={user.displayName}
+          email={user.email}
+        />
       </div>
     </div>
   );
