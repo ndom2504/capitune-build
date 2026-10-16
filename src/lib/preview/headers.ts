@@ -1,5 +1,6 @@
 import { fileBytes, isBinaryFilePath } from "@/lib/media/files";
 import { previewFrameAncestors } from "@/lib/preview/origin";
+import { isolatedRuntimeHeaders } from "@/lib/preview/runtime";
 
 export function previewContentType(filePath: string): string {
   if (filePath.endsWith(".html")) return "text/html; charset=utf-8";
@@ -16,15 +17,7 @@ export function previewContentType(filePath: string): string {
 }
 
 export function previewSecurityHeaders(): Record<string, string> {
-  const ancestors = previewFrameAncestors();
-  return {
-    "Content-Security-Policy":
-      `default-src 'none'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors ${ancestors}`,
-    "X-Content-Type-Options": "nosniff",
-    "Referrer-Policy": "no-referrer",
-    "Cache-Control": "no-store",
-    "X-Robots-Tag": "noindex",
-  };
+  return isolatedRuntimeHeaders(previewFrameAncestors());
 }
 
 export function previewFileResponse(content: string, filePath: string): Response {

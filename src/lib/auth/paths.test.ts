@@ -7,11 +7,14 @@ describe("auth helpers", () => {
   it("marks dashboard and workspace as protected", () => {
     expect(isProtectedPath("/dashboard")).toBe(true);
     expect(isProtectedPath("/workspace/abc")).toBe(true);
+    expect(isProtectedPath("/join/token-abc")).toBe(true);
+    expect(isProtectedPath("/demo")).toBe(false);
     expect(isProtectedPath("/")).toBe(false);
     expect(isAuthPath("/login")).toBe(true);
   });
 
   it("rejects open redirects", () => {
+    expect(safeNextPath("/join/token-abc")).toBe("/join/token-abc");
     expect(safeNextPath("/dashboard")).toBe("/dashboard");
     expect(safeNextPath("/")).toBe("/dashboard");
     expect(safeNextPath("/login")).toBe("/dashboard");

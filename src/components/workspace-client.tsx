@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { AppRail } from "@/components/app-rail";
-import type { ProjectBundle } from "@/lib/domain";
+import { canEdit, canManage, type AccessRole } from "@/lib/collab/roles";
+import { playgroundSrcDoc } from "@/lib/demo/document";
+import type { ProjectBundle, ProjectMember } from "@/lib/domain";
 import { t } from "@/lib/i18n/messages";
 import { isBinaryFilePath } from "@/lib/media/paths";
 import { previewPageUrl } from "@/lib/preview/url";
@@ -26,11 +28,13 @@ export function WorkspaceClient({
   demoMode,
   autoStart = false,
   previewToken,
+  playground = false,
 }: {
   initial: ProjectBundle;
   demoMode: boolean;
   autoStart?: boolean;
   previewToken: string;
+  playground?: boolean;
 }) {
   const router = useRouter();
   const [bundle, setBundle] = useState(initial);
@@ -62,7 +66,12 @@ export function WorkspaceClient({
       "",
   );
   const [saving, setSaving] = useState(false);
+  const [members, setMembers] = useState<ProjectMember[]>([]);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
+  const accessRole: AccessRole = bundle.project.accessRole ?? "owner";
+  const allowEdit = playground || canEdit(accessRole);
+  const allowManage = !playground && canManage(accessRole);
   const autoStarted = useRef(false);
 
   const htmlPages = useMemo(
@@ -107,15 +116,29 @@ export function WorkspaceClient({
 
   async function generate(text: string) {
     const value = text.trim();
-    if (!value || pending) return;
+    if (!value || pending || !allowEdit) return;
     setPending(true);
     setError(null);
     setLastPrompt(value);
-    const response = await fetch(`/api/projects/${bundle.project.id}/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: value }),
-    });
+    const response = await fetch(
+      playground ? "/api/demo/generate" : `/api/projects/${bundle.project.id}/generate`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          playground
+            ? {
+                prompt: value,
+                files: bundle.files.map((file) => ({ path: file.path, content: file.content })),
+                messages: bundle.messages
+                  .filter((message) => message.role === "user" || message.role === "assistant")
+                  .slice(-6)
+                  .map((message) => ({ role: message.role, content: message.content })),
+              }
+            : { prompt: value },
+        ),
+      },
+    );
     const payload = await response.json();
     setPending(false);
     if (!response.ok) {
@@ -123,7 +146,43 @@ export function WorkspaceClient({
       return;
     }
     setPrompt("");
-    await refreshBundle();
+    if (playground && Array.isArray(payload.files)) {
+      const now = new Date().toISOString();
+      setBundle((current) => ({
+        ...current,
+        files: payload.files.map(
+          (file: { path: string; content: string }, index: number) => ({
+            id: `file_demo_${index}`,
+            projectId: current.project.id,
+            path: file.path,
+            content: file.content,
+            updatedAt: now,
+          }),
+        ),
+        messages: [
+          ...current.messages,
+          {
+            id: `msg_u_${now}`,
+            conversationId: current.conversation.id,
+            role: "user" as const,
+            content: value,
+            demoMode: true,
+            createdAt: now,
+          },
+          {
+            id: `msg_a_${now}`,
+            conversationId: current.conversation.id,
+            role: "assistant" as const,
+            content: String(payload.summary || ""),
+            demoMode: true,
+            createdAt: now,
+          },
+        ],
+      }));
+      setPreviewKey((key) => key + 1);
+    } else {
+      await refreshBundle();
+    }
     setTab("preview");
   }
 
@@ -137,6 +196,7 @@ export function WorkspaceClient({
   }, [autoStart, initial.messages.length, initial.project.description, initial.project.id, router]);
 
   async function restore(versionId: string) {
+    if (playground || !allowEdit) return;
     if (!confirm("Restaurer cette version ? Une nouvelle version de récupération sera créée.")) {
       return;
     }
@@ -157,6 +217,7 @@ export function WorkspaceClient({
 
   async function rename(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (playground || !allowManage) return;
     const form = new FormData(event.currentTarget);
     const name = String(form.get("name") || "");
     await fetch(`/api/projects/${bundle.project.id}`, {
@@ -176,7 +237,38 @@ export function WorkspaceClient({
 
   const publicPath = bundle.project.publishToken ? publicSitePath(bundle.project.publishToken) : null;
 
+  useEffect(() => {
+    if (drawer !== "publish" || !allowManage) return;
+    void fetch(`/api/projects/${bundle.project.id}/members`)
+      .then((response) => response.json())
+      .then((payload) => {
+        if (Array.isArray(payload.members)) setMembers(payload.members);
+      })
+      .catch(() => undefined);
+  }, [allowManage, bundle.project.id, drawer]);
+
+  async function createInvite(role: "editor" | "viewer") {
+    setPublishBusy(true);
+    setError(null);
+    const response = await fetch(`/api/projects/${bundle.project.id}/invites`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role }),
+    });
+    const payload = await response.json();
+    setPublishBusy(false);
+    if (!response.ok) {
+      setError(payload.error || "Invitation impossible.");
+      return;
+    }
+    setInviteUrl(payload.url as string);
+    await navigator.clipboard.writeText(payload.url as string).catch(() => undefined);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  }
+
   async function publish(rotate = false) {
+    if (!allowManage) return;
     setPublishBusy(true);
     setError(null);
     const response = await fetch(`/api/projects/${bundle.project.id}/publish`, {
@@ -197,6 +289,7 @@ export function WorkspaceClient({
   }
 
   async function unpublish() {
+    if (!allowManage) return;
     setPublishBusy(true);
     setError(null);
     const response = await fetch(`/api/projects/${bundle.project.id}/publish`, { method: "DELETE" });
@@ -210,6 +303,7 @@ export function WorkspaceClient({
   }
 
   async function saveFile() {
+    if (playground || !allowEdit) return;
     if (!selectedFile || !dirty || saving) return;
     setSaving(true);
     setError(null);
@@ -237,7 +331,7 @@ export function WorkspaceClient({
 
   async function uploadMedia(fileList: FileList | null) {
     const file = fileList?.[0];
-    if (!file) return;
+    if (!file || playground || !allowEdit) return;
     setSaving(true);
     setError(null);
     const body = new FormData();
@@ -324,12 +418,12 @@ export function WorkspaceClient({
             onKeyDown={onPromptKey}
             placeholder={bundle.messages.length ? t("iteratePlaceholder") : t("promptPlaceholder")}
             rows={2}
-            disabled={pending}
+            disabled={pending || !allowEdit}
             className="min-h-[44px] flex-1 resize-none bg-transparent py-1.5 text-sm outline-none disabled:opacity-60"
           />
           <button
             type="submit"
-            disabled={pending || !prompt.trim()}
+            disabled={pending || !prompt.trim() || !allowEdit}
             className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent text-white disabled:opacity-40"
             aria-label={t("send")}
           >
@@ -388,7 +482,8 @@ export function WorkspaceClient({
             {hasPreview ? (
               <iframe
                 title="Aperçu du projet"
-                src={previewSrc}
+                src={playground ? undefined : previewSrc}
+                srcDoc={playground ? playgroundSrcDoc(bundle.files, previewPage) : undefined}
                 sandbox="allow-scripts"
                 referrerPolicy="no-referrer"
                 className="h-full min-h-[480px] bg-white"
@@ -412,10 +507,11 @@ export function WorkspaceClient({
             <button
               type="button"
               className="shrink-0 text-sm text-muted"
-              onClick={() => router.push("/dashboard")}
+              onClick={() => router.push(playground ? "/" : "/dashboard")}
             >
-              ← {t("projects")}
+              ← {playground ? t("appName") : t("projects")}
             </button>
+            {allowManage && !playground ? (
             <form onSubmit={rename} className="flex min-w-0 flex-1 items-center gap-2">
               <input
                 name="name"
@@ -426,6 +522,9 @@ export function WorkspaceClient({
                 {t("rename")}
               </button>
             </form>
+            ) : (
+              <p className="min-w-0 flex-1 truncate px-1 py-1 text-sm font-semibold">{bundle.project.name}</p>
+            )}
             <div className="hidden shrink-0 items-center gap-2 lg:flex">
               <button
                 type="button"
@@ -468,7 +567,18 @@ export function WorkspaceClient({
             </button>
           </div>
         </header>
-        {demoMode ? <p className="border-b bg-brand-soft px-4 py-2 text-xs sm:text-sm">{t("demoModeHint")}</p> : null}
+        {playground ? (
+          <p className="border-b bg-brand-soft px-4 py-2 text-xs sm:text-sm">
+            {t("playgroundHint")}{" "}
+            <a href="/signup" className="font-semibold text-brand">
+              {t("saveToAccount")}
+            </a>
+          </p>
+        ) : demoMode ? (
+          <p className="border-b bg-brand-soft px-4 py-2 text-xs sm:text-sm">{t("demoModeHint")}</p>
+        ) : !allowEdit ? (
+          <p className="border-b bg-brand-soft px-4 py-2 text-xs sm:text-sm">{t("readOnlyHint")}</p>
+        ) : null}
 
         <div className="flex gap-2 border-b bg-white px-3 py-2 lg:hidden">
           {(["conversation", "preview"] as const).map((item) => (
@@ -502,6 +612,12 @@ export function WorkspaceClient({
               </div>
               {drawer === "publish" ? (
                 <div className="space-y-3 p-4 text-sm">
+                  {playground ? (
+                    <a href="/signup" className="flex justify-center rounded-full bg-accent px-4 py-2.5 font-semibold text-white">
+                      {t("saveToAccount")}
+                    </a>
+                  ) : (
+                    <>
                   <p className="text-muted">{t("publishHint")}</p>
                   <label className="block text-xs font-medium text-muted" htmlFor="publish-slug">
                     {t("publishSlug")}
@@ -535,6 +651,8 @@ export function WorkspaceClient({
                       >
                         {t("openPublicSite")}
                       </a>
+                      {allowManage ? (
+                        <>
                       <button
                         type="button"
                         disabled={publishBusy}
@@ -551,18 +669,77 @@ export function WorkspaceClient({
                       >
                         {t("unpublish")}
                       </button>
+                        </>
+                      ) : null}
                     </>
                   ) : (
                     <button
                       type="button"
-                      disabled={publishBusy || !hasPreview}
+                      disabled={publishBusy || !hasPreview || !allowManage}
                       onClick={() => void publish(false)}
                       className="flex w-full justify-center rounded-full bg-accent px-4 py-2.5 font-semibold text-white disabled:opacity-60"
                     >
                       {t("putOnline")}
                     </button>
                   )}
-                  {hasPreview ? (
+                  {allowManage ? (
+                    <div className="space-y-2 border-t pt-3">
+                      <p className="font-medium">{t("invite")}</p>
+                      <p className="text-xs text-muted">{t("inviteHint")}</p>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          disabled={publishBusy}
+                          onClick={() => void createInvite("editor")}
+                          className="flex-1 rounded-full border px-3 py-2"
+                        >
+                          {t("inviteEditor")}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={publishBusy}
+                          onClick={() => void createInvite("viewer")}
+                          className="flex-1 rounded-full border px-3 py-2"
+                        >
+                          {t("inviteViewer")}
+                        </button>
+                      </div>
+                      {inviteUrl ? <p className="break-all font-mono text-[11px]">{inviteUrl}</p> : null}
+                      <p className="font-medium">{t("members")}</p>
+                      <ul className="space-y-1 text-xs">
+                        {members.map((member) => (
+                          <li key={member.userId} className="flex items-center justify-between gap-2">
+                            <span className="truncate">
+                              {member.displayName || member.email} ·{" "}
+                              {member.role === "owner"
+                                ? t("roleOwner")
+                                : member.role === "editor"
+                                  ? t("roleEditor")
+                                  : t("roleViewer")}
+                            </span>
+                            {member.role !== "owner" ? (
+                              <button
+                                type="button"
+                                className="text-danger"
+                                onClick={() => {
+                                  void fetch(`/api/projects/${bundle.project.id}/members`, {
+                                    method: "DELETE",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ userId: member.userId }),
+                                  }).then(() =>
+                                    setMembers((current) => current.filter((item) => item.userId !== member.userId)),
+                                  );
+                                }}
+                              >
+                                {t("removeMember")}
+                              </button>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {hasPreview && !playground ? (
                     <a
                       href={previewSrc}
                       target="_blank"
@@ -572,12 +749,16 @@ export function WorkspaceClient({
                       {t("openPreview")}
                     </a>
                   ) : null}
+                  {!playground ? (
                   <a
                     href={`/api/projects/${bundle.project.id}/export`}
                     className="flex justify-center rounded-full border px-4 py-2.5 font-medium"
                   >
                     {t("export")}
                   </a>
+                  ) : null}
+                    </>
+                  )}
                 </div>
               ) : (
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -590,9 +771,11 @@ export function WorkspaceClient({
                         bundle.versions.map((version) => (
                           <li key={version.id} className="flex items-center justify-between gap-2">
                             <span className="truncate">{version.label}</span>
+                            {allowEdit && !playground ? (
                             <button type="button" className="text-brand" onClick={() => restore(version.id)}>
                               {t("restore")}
                             </button>
+                            ) : null}
                           </li>
                         ))
                       )}
@@ -600,6 +783,8 @@ export function WorkspaceClient({
                   </div>
                   <div className="flex-1 overflow-auto p-4">
                     <p className="text-sm font-medium">{t("files")}</p>
+                    {allowEdit && !playground ? (
+                      <>
                     <label className="mt-3 flex cursor-pointer justify-center rounded-full border px-4 py-2 text-sm font-medium">
                       {t("uploadImage")}
                       <input
@@ -610,6 +795,8 @@ export function WorkspaceClient({
                       />
                     </label>
                     <p className="mt-1 text-xs text-muted">{t("mediaHint")}</p>
+                      </>
+                    ) : null}
                     <ul className="mt-2 space-y-1 text-sm">
                       {bundle.files.map((file) => (
                         <li key={file.id}>
@@ -627,7 +814,11 @@ export function WorkspaceClient({
                       isBinaryFilePath(selected.path) ? (
                         <div className="mt-3 space-y-2">
                           <img
-                            src={previewPageUrl(previewToken, selected.path, previewKey)}
+                            src={
+                              playground
+                                ? `data:image/png;base64,${selected.content.replace(/\s/g, "")}`
+                                : previewPageUrl(previewToken, selected.path, previewKey)
+                            }
                             alt={selected.path}
                             className="max-h-48 rounded-2xl border bg-slate-50 object-contain p-2"
                           />
@@ -638,9 +829,11 @@ export function WorkspaceClient({
                         <textarea
                           value={draft}
                           onChange={(event) => setDraft(event.target.value)}
+                          readOnly={!allowEdit}
                           className="mt-3 h-56 w-full resize-y rounded-2xl border bg-slate-50 p-3 font-mono text-xs"
                           spellCheck={false}
                         />
+                        {allowEdit && !playground ? (
                         <button
                           type="button"
                           disabled={!dirty || saving}
@@ -649,6 +842,7 @@ export function WorkspaceClient({
                         >
                           {saving ? "…" : dirty ? t("saveFile") : t("saved")}
                         </button>
+                        ) : null}
                       </>
                       )
                     ) : null}

@@ -5,6 +5,7 @@ describe("validateProjectPath", () => {
   it("accepts safe relative files", () => {
     expect(validateProjectPath("index.html")).toEqual({ ok: true, path: "index.html" });
     expect(validateProjectPath("css/styles.css")).toEqual({ ok: true, path: "css/styles.css" });
+    expect(validateProjectPath("app.js")).toEqual({ ok: true, path: "app.js" });
   });
 
   it("rejects traversal and absolute paths", () => {

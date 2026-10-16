@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { errorResponse } from "@/lib/http/guard";
 import { previewFileResponse, previewSecurityHeaders } from "@/lib/preview/headers";
+import { localizeGeneratedJs } from "@/lib/preview/runtime";
 import {
   isPublicSiteKey,
   localizePublishedHtml,
@@ -34,8 +35,11 @@ export async function GET(request: Request, context: Ctx) {
     if (!file) {
       throw new NotFoundError("Fichier introuvable.");
     }
-    const body =
-      file.path.endsWith(".html") ? localizePublishedHtml(file.content, token) : file.content;
+    const body = file.path.endsWith(".html")
+      ? localizePublishedHtml(file.content, token)
+      : file.path.endsWith(".js")
+        ? localizeGeneratedJs(file.content, `/s/${token}/`)
+        : file.content;
     return previewFileResponse(body, file.path);
   } catch (error) {
     if (error instanceof NotFoundError) {

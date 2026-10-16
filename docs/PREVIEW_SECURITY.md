@@ -6,7 +6,19 @@ L’aperçu du workspace est servi par `/p/[jeton]/index.html`. Le jeton est une
 
 Un site **publié** est servi par `/s/[slug]/index.html` sans session : uniquement les fichiers du projet, jamais la conversation. `/s/[slug]` redirige vers `index.html`. Le slug est unique ; le changer ou le retirer invalide l’ancienne URL. Les anciens jetons imprévisibles restent valides. La même CSP s’applique.
 
-`/p/` et `/s/` redirigent la racine vers `index.html`. Les assets en URL absolue (`/styles.css`) sont réécrits vers le préfixe du jeton.
+`/p/` et `/s/` redirigent la racine vers `index.html`. Les assets en URL absolue (`/styles.css`, imports JS) sont réécrits vers le préfixe du jeton.
+
+## Jalon 20 — runtime isolé
+
+Le JS **vanilla** du projet (`app.js`) s’exécute dans le navigateur de l’utilisateur, jamais dans le processus Capitune :
+
+- iframe `sandbox="allow-scripts"` (pas `allow-same-origin`) ;
+- CSP : `script-src 'self' 'unsafe-inline'`, `worker-src 'self' blob:`, `connect-src 'none'`, `form-action 'none'` ;
+- `Cross-Origin-Resource-Policy: same-origin` ;
+- pas de fetch, pas de cookies de session, pas de clé IA ni de rôle de service ;
+- playground `/demo` : le JS est inliné dans `srcDoc` (pas d’hôte `/p/`).
+
+Ce n’est pas un bundler ni un WebContainer : pas de npm, pas de React compilé, pas de Node.
 
 ## Origine dédiée
 
@@ -29,14 +41,10 @@ Sans cette variable, `/p/…` est servi sur l’origine de l’app (jeton signé
 
 ## En-têtes
 
-CSP (`default-src 'none'`, `connect-src 'none'`, `form-action 'none'`, `style-src` / `script-src` `'self' 'unsafe-inline'`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`. `X-Frame-Options` n’est pas posé sur `/p/` pour permettre l’iframe d’une origine dédiée.
+CSP (`default-src 'none'`, `connect-src 'none'`, `form-action 'none'`, `style-src` / `script-src` `'self' 'unsafe-inline'`, `worker-src 'self' blob:`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`, `Cross-Origin-Resource-Policy: same-origin`. `X-Frame-Options` n’est pas posé sur `/p/` pour permettre l’iframe d’une origine dédiée.
 
 ## Hors périmètre volontaire
 
 - Aucune exécution de commandes shell générées par le modèle.
 - Aucun accès base de données pour le modèle.
-- Les applications React complètes nécessiteront un **service d’exécution isolé** (autre origine, réseau restreint, pas de secrets Capitune).
-
-## Suite recommandée
-
-Un worker ou runtime (WebContainer-like auto-hébergé) qui reçoit un snapshot validé, le sert hors du processus privilégié, sans clé IA ni rôle de service Supabase.
+- Les applications React/bundlées nécessiteraient un **service d’exécution isolé** séparé (autre origine, réseau restreint, pas de secrets Capitune).

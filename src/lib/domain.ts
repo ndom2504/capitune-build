@@ -1,4 +1,5 @@
 import type { PlanId } from "@/lib/billing/plans";
+import type { AccessRole, InviteRole } from "@/lib/collab/roles";
 
 export type Profile = {
   id: string;
@@ -15,8 +16,23 @@ export type Project = {
   name: string;
   description: string;
   publishToken: string | null;
+  accessRole: AccessRole;
   createdAt: string;
   updatedAt: string;
+};
+
+export type ProjectMember = {
+  userId: string;
+  email: string;
+  displayName: string;
+  role: InviteRole | "owner";
+};
+
+export type ProjectInvite = {
+  token: string;
+  role: InviteRole;
+  expiresAt: string;
+  path: string;
 };
 
 export type ProjectFile = {

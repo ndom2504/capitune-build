@@ -23,6 +23,7 @@ describe("demo provider", () => {
     expect(first.files.find((file) => file.path === "index.html")?.content).toContain("Boutique de café");
     expect(first.files.find((file) => file.path === "index.html")?.content).toContain('href="styles.css"');
     expect(first.files.some((file) => file.path === "contact.html")).toBe(true);
+    expect(first.files.some((file) => file.path === "app.js")).toBe(true);
   });
 
   it("uses demo mode when no AI key is configured", () => {

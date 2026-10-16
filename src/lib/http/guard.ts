@@ -6,6 +6,7 @@ import {
   PublishSchemaError,
   SlugTakenError,
   BillingSchemaError,
+  CollabSchemaError,
 } from "@/lib/store/repository";
 import { ZodError } from "zod";
 
@@ -27,6 +28,9 @@ export function errorResponse(error: unknown): NextResponse {
   }
   if (error instanceof BillingSchemaError) {
     return NextResponse.json({ error: error.message, code: "BILLING_SCHEMA" }, { status: 503 });
+  }
+  if (error instanceof CollabSchemaError) {
+    return NextResponse.json({ error: error.message, code: "COLLAB_SCHEMA" }, { status: 503 });
   }
   if (error instanceof RateLimitError) {
     return NextResponse.json(

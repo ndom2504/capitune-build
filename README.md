@@ -2,11 +2,11 @@
 
 Capitune génère des sites web à partir d’instructions en langage naturel. Ce dépôt est le code de la **plateforme**, distinct des fichiers générés pour chaque projet utilisateur.
 
-## État du jalon 17
+## État du jalon 20
 
 Application Next.js avec :
 
-- pages `/`, `/login`, `/signup`, `/dashboard`, `/workspace/[projectId]`
+- pages `/`, `/demo`, `/login`, `/signup`, `/dashboard`, `/workspace/[projectId]`, `/join/[token]`
 - Auth e-mail + Google via Supabase, persistance Postgres
 - génération **IA réelle** si `AI_API_KEY` est défini (OpenAI-compatible) ; sinon mode démonstration explicite
 - atelier : exemples cliquables, génération dès la description, **aperçu multi-pages**, **édition + sauvegarde** (nouvelle version)
@@ -17,6 +17,9 @@ Application Next.js avec :
 - aperçu HTML/CSS sandboxé, versions récupérables, export ZIP
 - **médias** : PNG/JPG/WebP/GIF dans `images/`, conservés entre générations, ZIP binaire
 - **plans** : Gratuit (8 gén./10 min) et Pro (40) ; Stripe Checkout optionnel ; `0004_plan.sql` sur Supabase
+- **démo publique** `/demo` : atelier sans compte, aperçu `srcDoc`, rien n’est persisté
+- **collaboration** : lien d’invitation (éditeur / lecteur, 7 jours) ; `0005_collab.sql` sur Supabase
+- **runtime isolé** : JS vanilla dans l’aperçu (sandbox, CSP `connect-src 'none'`, pas de secrets Capitune) ; origine dédiée optionnelle `NEXT_PUBLIC_PREVIEW_ORIGIN`
 - ownership vérifié côté serveur ; RLS activé sur le schéma Supabase
 
 ## Prérequis

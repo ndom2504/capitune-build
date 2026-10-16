@@ -12,6 +12,7 @@ describe("export", () => {
         name: "Studio",
         description: "Test",
         publishToken: null,
+        accessRole: "owner",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       },

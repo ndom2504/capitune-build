@@ -1,4 +1,5 @@
 import type { PlanId } from "@/lib/billing/plans";
+import type { AccessRole, InviteRole } from "@/lib/collab/roles";
 import type {
   Conversation,
   Message,
@@ -6,6 +7,8 @@ import type {
   Project,
   ProjectBundle,
   ProjectFile,
+  ProjectInvite,
+  ProjectMember,
   ProjectVersion,
   VersionFile,
 } from "@/lib/domain";
@@ -37,6 +40,15 @@ export class SlugTakenError extends Error {
   constructor(message = "Cette adresse publique est déjà utilisée.") {
     super(message);
     this.name = "SlugTakenError";
+  }
+}
+
+export class CollabSchemaError extends Error {
+  constructor(
+    message = "La collaboration n’est pas prête. Exécutez supabase/migrations/0005_collab.sql dans le SQL Editor Supabase.",
+  ) {
+    super(message);
+    this.name = "CollabSchemaError";
   }
 }
 
@@ -118,4 +130,10 @@ export interface Repository {
   ): Promise<Profile>;
   findUserByStripeCustomerId(customerId: string): Promise<Profile | null>;
   billingSchemaReady(): Promise<boolean>;
+  listMembers(userId: string, projectId: string): Promise<ProjectMember[]>;
+  createInvite(ownerId: string, projectId: string, role: InviteRole): Promise<ProjectInvite>;
+  acceptInvite(userId: string, token: string): Promise<Project>;
+  removeMember(ownerId: string, projectId: string, memberUserId: string): Promise<void>;
+  collabSchemaReady(): Promise<boolean>;
+  projectAccess(userId: string, projectId: string): Promise<AccessRole>;
 }

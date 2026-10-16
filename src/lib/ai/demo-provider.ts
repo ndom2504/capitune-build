@@ -21,6 +21,7 @@ function sampleSite(input: GenerateProjectInput): GenerationResult {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title}</title>
   <link rel="stylesheet" href="styles.css" />
+  <script src="app.js" defer></script>
 </head>
 <body>
   ${nav}
@@ -29,6 +30,7 @@ function sampleSite(input: GenerateProjectInput): GenerationResult {
     <p><img src="images/mark.png" width="48" height="48" alt="" /></p>
     <h1>${title}</h1>
     <p class="lead">${escapeHtml(input.projectDescription || "Site d’exemple déterministe.")}</p>
+    <p><button type="button" class="toggle" data-theme-toggle>Contraste élevé</button></p>
   </header>
   <main>
     <section>
@@ -37,8 +39,8 @@ function sampleSite(input: GenerateProjectInput): GenerationResult {
     </section>
     <section class="grid">
       <article>
-        <h3>Aperçu sûr</h3>
-        <p>Cette vitrine est du HTML et du CSS statiques. Aucun code généré n’est exécuté sur le serveur Capitune.</p>
+        <h3>Aperçu isolé</h3>
+        <p>Le HTML, le CSS et le JS tournent dans un bac à sable, sans réseau et sans secrets Capitune. Rien n’est exécuté sur le serveur.</p>
       </article>
       <article>
         <h3>Versions</h3>
@@ -101,7 +103,16 @@ h1 { font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.08; margin: 0.4rem 0 1r
 .lead, p { color: var(--muted); line-height: 1.65; }
 .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-top: 1.5rem; }
 article { background: var(--card); border: 1px solid var(--line); border-radius: 1.25rem; padding: 1.25rem; }
+.toggle { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 999px; padding: 0.55rem 1rem; font-weight: 600; cursor: pointer; }
+body.alt { background: #0b1220; color: #eef2ff; }
+body.alt .lead, body.alt p { color: #c7d0e4; }
+body.alt article, body.alt .toggle { background: #151d2e; border-color: #2a3550; color: #eef2ff; }
 footer { font-size: 0.85rem; border-top: 1px solid var(--line); }
+`;
+
+  const appJs = `document.querySelector("[data-theme-toggle]")?.addEventListener("click", () => {
+  document.body.classList.toggle("alt");
+});
 `;
 
   const readme = `# ${input.projectName}
@@ -112,7 +123,7 @@ Ce dossier contient le code généré par Capitune, distinct du code source de l
 ${input.prompt}
 
 ## Exécution
-Ouvrez \`index.html\` dans un navigateur. Aucun serveur n’est requis pour cette vitrine HTML/CSS.
+Ouvrez \`index.html\` dans un navigateur. HTML, CSS et JS vanilla : aucun serveur Capitune n’exécute ce code.
 
 Mode démonstration: sortie déterministe sans appel à un modèle IA.
 `;
@@ -123,6 +134,7 @@ Mode démonstration: sortie déterministe sans appel à un modèle IA.
       { path: "index.html", content: html },
       { path: "contact.html", content: contact },
       { path: "styles.css", content: css },
+      { path: "app.js", content: appJs },
       { path: "README.md", content: readme },
       { path: "images/mark.png", content: PIXEL_PNG_BASE64 },
     ],

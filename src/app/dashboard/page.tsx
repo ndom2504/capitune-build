@@ -25,6 +25,7 @@ export default async function DashboardPage({
   let publishReady = true;
   let quotaReady = true;
   let billingReady = true;
+  let collabReady = true;
   try {
     publishReady = await repository.publishSchemaReady();
   } catch {
@@ -40,7 +41,13 @@ export default async function DashboardPage({
   } catch {
     billingReady = false;
   }
+  try {
+    collabReady = await repository.collabSchemaReady();
+  } catch {
+    collabReady = false;
+  }
   const billingNotice = query.billing === "success" ? "success" : query.billing === "cancel" ? "cancel" : null;
+  const collabNotice = query.collab === "schema" ? "schema" : query.collab === "invalid" ? "invalid" : null;
 
   return (
     <div className="flex min-h-screen">
@@ -69,6 +76,15 @@ export default async function DashboardPage({
           ) : null}
           {env.mode === "supabase" && !billingReady ? (
             <p className="mt-3 max-w-2xl rounded-2xl bg-brand-soft px-4 py-3 text-sm">{t("billingSchemaMissing")}</p>
+          ) : null}
+          {env.mode === "supabase" && !collabReady ? (
+            <p className="mt-3 max-w-2xl rounded-2xl bg-brand-soft px-4 py-3 text-sm">{t("collabSchemaMissing")}</p>
+          ) : null}
+          {collabNotice === "schema" ? (
+            <p className="mt-3 max-w-2xl rounded-2xl bg-brand-soft px-4 py-3 text-sm">{t("collabSchemaMissing")}</p>
+          ) : null}
+          {collabNotice === "invalid" ? (
+            <p className="mt-3 max-w-2xl rounded-2xl bg-brand-soft px-4 py-3 text-sm">{t("collabInvalid")}</p>
           ) : null}
           <div className="mt-8">
             <DashboardClient

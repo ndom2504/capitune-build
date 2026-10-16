@@ -63,7 +63,7 @@ export default async function HomePage({
                 <span aria-hidden>→</span>
               </Link>
               <a
-                href="#demo"
+                href="/demo"
                 className="inline-flex items-center gap-2 rounded-full border bg-white px-5 py-3 text-sm font-semibold text-foreground shadow-sm"
               >
                 <span className="flex h-5 w-5 items-center justify-center rounded-full border text-[10px]">▶</span>

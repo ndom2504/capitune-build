@@ -1,7 +1,7 @@
 import { extractJsonObject, validateGenerationResult, type GenerationResult } from "@/lib/ai/schema";
 import type { AIProvider, GenerateProjectInput } from "@/lib/ai/provider";
 
-const SYSTEM_PROMPT = `Tu génères des sites web statiques pour Capitune.
+const SYSTEM_PROMPT = `Tu génères des sites web HTML/CSS/JS statiques pour Capitune (pas de serveur).
 Réponds uniquement par un objet JSON : {"summary":"phrase courte en français","files":[{"path":"index.html","content":"..."}]}.
 Règles :
 - Fichiers autorisés en sortie : html, css, js, md, svg, txt, json. Ne génère pas de PNG/JPEG (ils sont déjà dans le projet s’ils existent).
@@ -12,7 +12,8 @@ Règles :
 - Copie réelle en français (sauf si l’utilisateur demande une autre langue) : titres, sous-titres, CTA, pied de page.
 - Images : fichiers déjà listés dans mediaPaths (src relatif), SVG inline, ou URLs https. N’invente pas de binaires.
 - Itère à partir des fichiers existants : conserve ce qui fonctionne, applique l’instruction.
-- Interdit : chemins .., secrets, shell, backend, appels vers capitune.com, javascript malveillant, CDNs JS obligatoires.
+- JS vanilla autorisé (app.js) pour l’interactivité dans le navigateur : pas d’import npm, pas de fetch, pas d’accès à parent/top, pas d’appel vers capitune.com.
+- Interdit : chemins .., secrets, shell, backend, javascript malveillant, CDNs JS obligatoires.
 - summary : 1 à 2 phrases, ce qui a changé.`;
 
 export function createOpenAICompatibleProvider(config: {

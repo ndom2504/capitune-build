@@ -11,7 +11,9 @@ import type {
   VersionFile,
 } from "@/lib/domain";
 import { generationMaxForPlan, normalizePlan } from "@/lib/billing/plans";
+import { roleAtLeast, type AccessRole, type InviteRole } from "@/lib/collab/roles";
 import { GENERATION_RATE_LIMIT } from "@/lib/constants";
+import { createPublishToken } from "@/lib/publish/token";
 import { tickQuota } from "@/lib/rate-limit";
 import { emptyState, type StoreState } from "@/lib/store/memory-state";
 import {
@@ -84,13 +86,37 @@ export function createLocalRepository(filePath: string): Repository {
     return project;
   }
 
-  function bundle(state: StoreState, project: Project): ProjectBundle {
+  function resolveAccess(state: StoreState, userId: string, projectId: string): AccessRole | null {
+    const project = state.projects.find((item) => item.id === projectId);
+    if (!project) return null;
+    if (project.ownerId === userId) return "owner";
+    const member = (state.members ?? []).find((item) => item.projectId === projectId && item.userId === userId);
+    return member?.role ?? null;
+  }
+
+  function requireAccess(state: StoreState, userId: string, projectId: string, minimum: AccessRole): Project {
+    const project = state.projects.find((item) => item.id === projectId);
+    if (!project) {
+      throw new NotFoundError("Projet introuvable.");
+    }
+    const role = resolveAccess(state, userId, projectId);
+    if (!role || !roleAtLeast(role, minimum)) {
+      throw new OwnershipError();
+    }
+    return project;
+  }
+
+  function withRole(project: Project, role: AccessRole): Project {
+    return { ...project, publishToken: project.publishToken ?? null, accessRole: role };
+  }
+
+  function bundle(state: StoreState, project: Project, role: AccessRole): ProjectBundle {
     const conversation = state.conversations.find((item) => item.projectId === project.id);
     if (!conversation) {
       throw new NotFoundError("Conversation introuvable.");
     }
     return {
-      project: { ...project, publishToken: project.publishToken ?? null },
+      project: withRole(project, role),
       files: state.files.filter((item) => item.projectId === project.id),
       conversation,
       messages: state.messages.filter((item) => item.conversationId === conversation.id),
@@ -134,10 +160,17 @@ export function createLocalRepository(filePath: string): Repository {
 
     async listProjects(ownerId: string): Promise<Project[]> {
       const state = await load();
-      return state.projects
+      const owned = state.projects
         .filter((project) => project.ownerId === ownerId)
-        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-        .map((project) => ({ ...project, publishToken: project.publishToken ?? null }));
+        .map((project) => withRole(project, "owner"));
+      const shared = (state.members ?? [])
+        .filter((member) => member.userId === ownerId)
+        .map((member) => {
+          const project = state.projects.find((item) => item.id === member.projectId);
+          return project ? withRole(project, member.role) : null;
+        })
+        .filter((project): project is Project => Boolean(project));
+      return [...owned, ...shared].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     },
 
     async createProject(input): Promise<ProjectBundle> {
@@ -149,6 +182,7 @@ export function createLocalRepository(filePath: string): Repository {
           name: input.name.trim(),
           description: input.description.trim(),
           publishToken: null,
+          accessRole: "owner",
           createdAt,
           updatedAt: createdAt,
         };
@@ -159,13 +193,14 @@ export function createLocalRepository(filePath: string): Repository {
         };
         state.projects.push(project);
         state.conversations.push(conversation);
-        return bundle(state, project);
+        return bundle(state, project, "owner");
       });
     },
 
     async getProject(ownerId, projectId): Promise<ProjectBundle> {
       const state = await load();
-      return bundle(state, requireOwnedProject(state, ownerId, projectId));
+      const project = requireAccess(state, ownerId, projectId, "viewer");
+      return bundle(state, project, resolveAccess(state, ownerId, projectId) ?? "viewer");
     },
 
     async renameProject(ownerId, projectId, name): Promise<Project> {
@@ -173,7 +208,7 @@ export function createLocalRepository(filePath: string): Repository {
         const project = requireOwnedProject(state, ownerId, projectId);
         project.name = name.trim();
         project.updatedAt = nowIso();
-        return project;
+        return withRole(project, "owner");
       });
     },
 
@@ -196,12 +231,15 @@ export function createLocalRepository(filePath: string): Repository {
         state.versionFiles = state.versionFiles.filter(
           (item) => !versionIds.includes(item.versionId),
         );
+        state.members = (state.members ?? []).filter((item) => item.projectId !== projectId);
+        state.invites = (state.invites ?? []).filter((item) => item.projectId !== projectId);
       });
     },
 
     async replaceFiles(ownerId, projectId, files, versionLabel) {
       return mutate((state) => {
-        const project = requireOwnedProject(state, ownerId, projectId);
+        requireAccess(state, ownerId, projectId, "editor");
+        const project = state.projects.find((item) => item.id === projectId)!;
         const createdAt = nowIso();
         const version: ProjectVersion = {
           id: id("ver"),
@@ -237,13 +275,13 @@ export function createLocalRepository(filePath: string): Repository {
       if (!version) {
         throw new NotFoundError("Version introuvable.");
       }
-      requireOwnedProject(state, ownerId, version.projectId);
+      requireAccess(state, ownerId, version.projectId, "viewer");
       return state.versionFiles.filter((item) => item.versionId === versionId);
     },
 
     async restoreVersion(ownerId, projectId, versionId): Promise<ProjectBundle> {
       return mutate(async (state) => {
-        requireOwnedProject(state, ownerId, projectId);
+        requireAccess(state, ownerId, projectId, "editor");
         const version = state.versions.find(
           (item) => item.id === versionId && item.projectId === projectId,
         );
@@ -277,15 +315,15 @@ export function createLocalRepository(filePath: string): Repository {
             content: file.content,
           })),
         );
-        const project = requireOwnedProject(state, ownerId, projectId);
+        const project = requireAccess(state, ownerId, projectId, "editor");
         project.updatedAt = createdAt;
-        return bundle(state, project);
+        return bundle(state, project, resolveAccess(state, ownerId, projectId) ?? "editor");
       });
     },
 
     async addMessage(ownerId, projectId, input): Promise<Message> {
       return mutate((state) => {
-        requireOwnedProject(state, ownerId, projectId);
+        requireAccess(state, ownerId, projectId, "editor");
         const conversation = state.conversations.find((item) => item.projectId === projectId);
         if (!conversation) {
           throw new NotFoundError("Conversation introuvable.");
@@ -323,7 +361,7 @@ export function createLocalRepository(filePath: string): Repository {
         }
         project.publishToken = token;
         project.updatedAt = nowIso();
-        return project;
+        return withRole(project, "owner");
       });
     },
 
@@ -391,6 +429,89 @@ export function createLocalRepository(filePath: string): Repository {
     },
 
     async billingSchemaReady() {
+      return true;
+    },
+
+    async projectAccess(userId, projectId) {
+      const state = await load();
+      const role = resolveAccess(state, userId, projectId);
+      if (!role) throw new OwnershipError();
+      return role;
+    },
+
+    async listMembers(userId, projectId) {
+      const state = await load();
+      const project = requireAccess(state, userId, projectId, "viewer");
+      const owner = state.users.find((item) => item.id === project.ownerId);
+      const members = (state.members ?? [])
+        .filter((item) => item.projectId === projectId)
+        .map((item) => {
+          const user = state.users.find((entry) => entry.id === item.userId);
+          return {
+            userId: item.userId,
+            email: user?.email ?? "",
+            displayName: user?.displayName ?? "",
+            role: item.role as InviteRole,
+          };
+        });
+      return [
+        {
+          userId: project.ownerId,
+          email: owner?.email ?? "",
+          displayName: owner?.displayName ?? "",
+          role: "owner" as const,
+        },
+        ...members,
+      ];
+    },
+
+    async createInvite(ownerId, projectId, role) {
+      return mutate((state) => {
+        requireOwnedProject(state, ownerId, projectId);
+        if (!state.invites) state.invites = [];
+        const token = createPublishToken();
+        const createdAt = nowIso();
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+        state.invites.push({ token, projectId, role, createdBy: ownerId, expiresAt, createdAt });
+        return { token, role, expiresAt, path: `/join/${token}` };
+      });
+    },
+
+    async acceptInvite(userId, token) {
+      return mutate((state) => {
+        if (!state.invites) state.invites = [];
+        if (!state.members) state.members = [];
+        const invite = state.invites.find((item) => item.token === token);
+        if (!invite || new Date(invite.expiresAt).getTime() < Date.now()) {
+          throw new NotFoundError("Invitation introuvable ou expirée.");
+        }
+        const project = state.projects.find((item) => item.id === invite.projectId);
+        if (!project) throw new NotFoundError("Projet introuvable.");
+        if (project.ownerId === userId) return withRole(project, "owner");
+        const existing = state.members.find((item) => item.projectId === project.id && item.userId === userId);
+        if (!existing) {
+          state.members.push({
+            projectId: project.id,
+            userId,
+            role: invite.role,
+            createdAt: nowIso(),
+          });
+        }
+        return withRole(project, existing?.role ?? invite.role);
+      });
+    },
+
+    async removeMember(ownerId, projectId, memberUserId) {
+      return mutate((state) => {
+        requireOwnedProject(state, ownerId, projectId);
+        if (memberUserId === ownerId) throw new OwnershipError("Impossible de retirer le propriétaire.");
+        state.members = (state.members ?? []).filter(
+          (item) => !(item.projectId === projectId && item.userId === memberUserId),
+        );
+      });
+    },
+
+    async collabSchemaReady() {
       return true;
     },
   };

@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { canManage } from "@/lib/collab/roles";
 import type { Project } from "@/lib/domain";
 import { t } from "@/lib/i18n/messages";
 import type { GenerationUsage } from "@/lib/store/repository";
@@ -56,6 +57,8 @@ export function DashboardClient({
   }
 
   async function remove(id: string) {
+    const project = projects.find((item) => item.id === id);
+    if (project && !isOwner(project)) return;
     if (!confirm("Supprimer ce projet et ses versions ?")) return;
     const response = await fetch(`/api/projects/${id}`, { method: "DELETE" });
     if (response.ok) {
@@ -71,6 +74,8 @@ export function DashboardClient({
   }
 
   async function publishProject(id: string) {
+    const project = projects.find((item) => item.id === id);
+    if (project && !isOwner(project)) return;
     setPublishBusy(id);
     setError(null);
     const response = await fetch(`/api/projects/${id}/publish`, {
@@ -87,7 +92,13 @@ export function DashboardClient({
     setProjects((current) => current.map((project) => (project.id === id ? payload.project : project)));
   }
 
+  function isOwner(project: Project) {
+    return canManage(project.accessRole ?? "owner");
+  }
+
   async function unpublishProject(id: string) {
+    const project = projects.find((item) => item.id === id);
+    if (project && !isOwner(project)) return;
     setPublishBusy(id);
     setError(null);
     const response = await fetch(`/api/projects/${id}/publish`, { method: "DELETE" });
@@ -101,6 +112,8 @@ export function DashboardClient({
   }
 
   async function rename(id: string) {
+    const project = projects.find((item) => item.id === id);
+    if (project && !isOwner(project)) return;
     const response = await fetch(`/api/projects/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -196,6 +209,11 @@ export function DashboardClient({
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-lg font-bold">{project.name}</h3>
+                  {!isOwner(project) ? (
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                      {t("sharedWithMe")}
+                    </span>
+                  ) : null}
                   {project.publishToken ? (
                     <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
                       {t("publishLive")}
@@ -224,6 +242,7 @@ export function DashboardClient({
                     <button type="button" onClick={() => void copyPublic(project)} className="rounded-full border px-4 py-2">
                       {copiedId === project.id ? t("copied") : t("copyLink")}
                     </button>
+                    {isOwner(project) ? (
                     <button
                       type="button"
                       disabled={publishBusy === project.id || !publishReady}
@@ -232,8 +251,9 @@ export function DashboardClient({
                     >
                       {t("unpublish")}
                     </button>
+                    ) : null}
                   </>
-                ) : (
+                ) : isOwner(project) ? (
                   <button
                     type="button"
                     disabled={publishBusy === project.id || !publishReady}
@@ -242,8 +262,9 @@ export function DashboardClient({
                   >
                     {t("putOnline")}
                   </button>
-                )}
-                {renaming === project.id ? (
+                ) : null}
+                {isOwner(project) ? (
+                  renaming === project.id ? (
                   <>
                     <input
                       value={renameValue}
@@ -265,13 +286,16 @@ export function DashboardClient({
                   >
                     {t("rename")}
                   </button>
-                )}
+                )
+                ) : null}
                 <a href={`/api/projects/${project.id}/export`} className="rounded-full border px-3 py-2">
                   {t("export")}
                 </a>
+                {isOwner(project) ? (
                 <button type="button" onClick={() => remove(project.id)} className="rounded-full border px-3 py-2 text-danger">
                   {t("delete")}
                 </button>
+                ) : null}
               </div>
             </li>
           ))}

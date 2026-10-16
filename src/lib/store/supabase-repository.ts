@@ -25,11 +25,15 @@ import {
 } from "@/lib/store/mappers";
 import { isMissingPlanColumn } from "@/lib/billing/ready";
 import { generationMaxForPlan, normalizePlan } from "@/lib/billing/plans";
+import { isMissingCollabSchema } from "@/lib/collab/ready";
+import { roleAtLeast, type AccessRole, type InviteRole } from "@/lib/collab/roles";
+import { createPublishToken } from "@/lib/publish/token";
 import { GENERATION_RATE_LIMIT } from "@/lib/constants";
 import { consumeMemoryRateLimit } from "@/lib/rate-limit";
 import { isMissingPublishColumn } from "@/lib/publish/ready";
 import {
   BillingSchemaError,
+  CollabSchemaError,
   NotFoundError,
   OwnershipError,
   PublishSchemaError,
@@ -72,7 +76,34 @@ export function createSupabaseRepository(admin: SupabaseClient): Repository {
     return project;
   }
 
-  async function bundle(project: ProjectRow): Promise<ProjectBundle> {
+  async function resolveAccess(userId: string, projectId: string): Promise<{ project: ProjectRow; role: AccessRole }> {
+    const { data, error } = await admin.from("projects").select("*").eq("id", projectId).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) throw new NotFoundError("Projet introuvable.");
+    const project = data as ProjectRow;
+    if (project.owner_id === userId) return { project, role: "owner" };
+    const { data: member, error: memberError } = await admin
+      .from("project_members")
+      .select("role")
+      .eq("project_id", projectId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (memberError) {
+      if (isMissingCollabSchema(memberError.message)) throw new OwnershipError();
+      throw new Error(memberError.message);
+    }
+    const role = (member as { role?: string } | null)?.role;
+    if (role === "editor" || role === "viewer") return { project, role };
+    throw new OwnershipError();
+  }
+
+  async function requireAccess(userId: string, projectId: string, minimum: AccessRole): Promise<ProjectRow> {
+    const { project, role } = await resolveAccess(userId, projectId);
+    if (!roleAtLeast(role, minimum)) throw new OwnershipError();
+    return project;
+  }
+
+  async function bundle(project: ProjectRow, role: AccessRole = "owner"): Promise<ProjectBundle> {
     const { data: conversation, error: conversationError } = await admin
       .from("conversations")
       .select("*")
@@ -101,7 +132,7 @@ export function createSupabaseRepository(admin: SupabaseClient): Repository {
     if (versionsError) throw new Error(versionsError.message);
 
     return {
-      project: mapProject(project),
+      project: { ...mapProject(project), accessRole: role },
       files: ((files || []) as FileRow[]).map(mapFile),
       conversation: mapConversation(conversationRow),
       messages: ((messages || []) as MessageRow[]).map(mapMessage),
@@ -155,7 +186,27 @@ export function createSupabaseRepository(admin: SupabaseClient): Repository {
         .eq("owner_id", ownerId)
         .order("updated_at", { ascending: false });
       if (error) throw new Error(error.message);
-      return ((data || []) as ProjectRow[]).map(mapProject);
+      const owned = ((data || []) as ProjectRow[]).map((row) => ({ ...mapProject(row), accessRole: "owner" as const }));
+      const { data: memberships, error: memberError } = await admin
+        .from("project_members")
+        .select("project_id, role")
+        .eq("user_id", ownerId);
+      if (memberError) {
+        if (isMissingCollabSchema(memberError.message)) return owned;
+        throw new Error(memberError.message);
+      }
+      const ids = ((memberships || []) as { project_id: string; role: string }[]).map((item) => item.project_id);
+      if (ids.length === 0) return owned;
+      const { data: sharedRows, error: sharedError } = await admin.from("projects").select("*").in("id", ids);
+      if (sharedError) throw new Error(sharedError.message);
+      const roleById = new Map(
+        ((memberships || []) as { project_id: string; role: InviteRole }[]).map((item) => [item.project_id, item.role]),
+      );
+      const shared = ((sharedRows || []) as ProjectRow[]).map((row) => ({
+        ...mapProject(row),
+        accessRole: roleById.get(row.id) === "editor" ? ("editor" as const) : ("viewer" as const),
+      }));
+      return [...owned, ...shared].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     },
 
     async createProject(input): Promise<ProjectBundle> {
@@ -180,11 +231,12 @@ export function createSupabaseRepository(admin: SupabaseClient): Repository {
         throw new Error(conversationError.message);
       }
       void conversation;
-      return bundle(projectRow);
+      return bundle(projectRow, "owner");
     },
 
     async getProject(ownerId, projectId): Promise<ProjectBundle> {
-      return bundle(await requireOwnedProject(ownerId, projectId));
+      const { project, role } = await resolveAccess(ownerId, projectId);
+      return bundle(project, role);
     },
 
     async renameProject(ownerId, projectId, name): Promise<Project> {
@@ -206,9 +258,9 @@ export function createSupabaseRepository(admin: SupabaseClient): Repository {
     },
 
     async replaceFiles(ownerId, projectId, files, versionLabel) {
-      await requireOwnedProject(ownerId, projectId);
+      const project = await requireAccess(ownerId, projectId, "editor");
       const { data, error } = await admin.rpc("apply_project_files", {
-        p_owner_id: ownerId,
+        p_owner_id: project.owner_id,
         p_project_id: projectId,
         p_label: versionLabel,
         p_files: files,
@@ -232,7 +284,7 @@ export function createSupabaseRepository(admin: SupabaseClient): Repository {
         .maybeSingle();
       if (versionError) throw new Error(versionError.message);
       if (!version) throw new NotFoundError("Version introuvable.");
-      await requireOwnedProject(ownerId, (version as VersionRow).project_id);
+      await requireAccess(ownerId, (version as VersionRow).project_id, "viewer");
       const { data, error } = await admin
         .from("project_version_files")
         .select("*")
@@ -262,7 +314,7 @@ export function createSupabaseRepository(admin: SupabaseClient): Repository {
     },
 
     async addMessage(ownerId, projectId, input): Promise<Message> {
-      await requireOwnedProject(ownerId, projectId);
+      await requireAccess(ownerId, projectId, "editor");
       const { data: conversation, error: conversationError } = await admin
         .from("conversations")
         .select("*")
@@ -438,6 +490,118 @@ export function createSupabaseRepository(admin: SupabaseClient): Repository {
       const { error } = await admin.from("profiles").select("plan").limit(1);
       if (!error) return true;
       if (isMissingPlanColumn(error.message)) return false;
+      throw new Error(error.message);
+    },
+
+    async projectAccess(userId, projectId) {
+      const { role } = await resolveAccess(userId, projectId);
+      return role;
+    },
+
+    async listMembers(userId, projectId) {
+      const project = await requireAccess(userId, projectId, "viewer");
+      const owner = await this.findUserById(project.owner_id);
+      const { data, error } = await admin.from("project_members").select("user_id, role").eq("project_id", projectId);
+      if (error) {
+        if (isMissingCollabSchema(error.message)) {
+          return [
+            {
+              userId: project.owner_id,
+              email: owner?.email ?? "",
+              displayName: owner?.displayName ?? "",
+              role: "owner" as const,
+            },
+          ];
+        }
+        throw new Error(error.message);
+      }
+      const members = await Promise.all(
+        ((data || []) as { user_id: string; role: InviteRole }[]).map(async (item) => {
+          const profile = await this.findUserById(item.user_id);
+          return {
+            userId: item.user_id,
+            email: profile?.email ?? "",
+            displayName: profile?.displayName ?? "",
+            role: item.role,
+          };
+        }),
+      );
+      return [
+        {
+          userId: project.owner_id,
+          email: owner?.email ?? "",
+          displayName: owner?.displayName ?? "",
+          role: "owner" as const,
+        },
+        ...members,
+      ];
+    },
+
+    async createInvite(ownerId, projectId, role) {
+      await requireOwnedProject(ownerId, projectId);
+      const token = createPublishToken();
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { error } = await admin.from("project_invites").insert({
+        token,
+        project_id: projectId,
+        role,
+        created_by: ownerId,
+        expires_at: expiresAt,
+      });
+      if (error) {
+        if (isMissingCollabSchema(error.message)) throw new CollabSchemaError();
+        throw new Error(error.message);
+      }
+      return { token, role, expiresAt, path: `/join/${token}` };
+    },
+
+    async acceptInvite(userId, token) {
+      const { data, error } = await admin.from("project_invites").select("*").eq("token", token).maybeSingle();
+      if (error) {
+        if (isMissingCollabSchema(error.message)) throw new CollabSchemaError();
+        throw new Error(error.message);
+      }
+      if (!data) throw new NotFoundError("Invitation introuvable ou expirée.");
+      const invite = data as { project_id: string; role: InviteRole; expires_at: string };
+      if (new Date(invite.expires_at).getTime() < Date.now()) {
+        throw new NotFoundError("Invitation introuvable ou expirée.");
+      }
+      const { data: project, error: projectError } = await admin
+        .from("projects")
+        .select("*")
+        .eq("id", invite.project_id)
+        .maybeSingle();
+      if (projectError) throw new Error(projectError.message);
+      if (!project) throw new NotFoundError("Projet introuvable.");
+      const row = project as ProjectRow;
+      if (row.owner_id === userId) return { ...mapProject(row), accessRole: "owner" };
+      const { error: upsertError } = await admin.from("project_members").upsert({
+        project_id: row.id,
+        user_id: userId,
+        role: invite.role,
+      });
+      if (upsertError) throw new Error(upsertError.message);
+      return { ...mapProject(row), accessRole: invite.role };
+    },
+
+    async removeMember(ownerId, projectId, memberUserId) {
+      await requireOwnedProject(ownerId, projectId);
+      if (memberUserId === ownerId) throw new OwnershipError("Impossible de retirer le propriétaire.");
+      const { error } = await admin
+        .from("project_members")
+        .delete()
+        .eq("project_id", projectId)
+        .eq("user_id", memberUserId);
+      if (error) {
+        if (isMissingCollabSchema(error.message)) throw new CollabSchemaError();
+        throw new Error(error.message);
+      }
+    },
+
+    async collabSchemaReady() {
+      const { error } = await admin.from("project_members").select("user_id").limit(1);
+      if (!error) return true;
+      if (isMissingCollabSchema(error.message)) return false;
       throw new Error(error.message);
     },
   };

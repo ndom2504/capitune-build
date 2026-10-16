@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { errorResponse } from "@/lib/http/guard";
 import { previewFileResponse, previewSecurityHeaders } from "@/lib/preview/headers";
 import { decodePreviewToken } from "@/lib/preview/token";
+import { localizeGeneratedJs } from "@/lib/preview/runtime";
 import { localizePreviewHtml, needsPreviewIndexRedirect, previewFilePath, previewSitePath } from "@/lib/preview/url";
 import { validateProjectPath } from "@/lib/projects/paths";
 import { getRepository } from "@/lib/store";
@@ -30,7 +31,11 @@ export async function GET(request: Request, context: Ctx) {
     if (!file) {
       throw new NotFoundError("Fichier introuvable.");
     }
-    const body = file.path.endsWith(".html") ? localizePreviewHtml(file.content, token) : file.content;
+    const body = file.path.endsWith(".html")
+      ? localizePreviewHtml(file.content, token)
+      : file.path.endsWith(".js")
+        ? localizeGeneratedJs(file.content, `/p/${token}/`)
+        : file.content;
     return previewFileResponse(body, file.path);
   } catch (error) {
     if (error instanceof NotFoundError || error instanceof OwnershipError) {

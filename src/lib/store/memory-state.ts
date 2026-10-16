@@ -6,7 +6,24 @@ import type {
   ProjectVersion,
   VersionFile,
 } from "@/lib/domain";
+import type { InviteRole } from "@/lib/collab/roles";
 import type { StoredUser } from "@/lib/store/repository";
+
+export type StoredMember = {
+  projectId: string;
+  userId: string;
+  role: InviteRole;
+  createdAt: string;
+};
+
+export type StoredInvite = {
+  token: string;
+  projectId: string;
+  role: InviteRole;
+  createdBy: string;
+  expiresAt: string;
+  createdAt: string;
+};
 
 export type StoredQuota = {
   ownerId: string;
@@ -23,6 +40,8 @@ export type StoreState = {
   versions: ProjectVersion[];
   versionFiles: VersionFile[];
   quotas: StoredQuota[];
+  members: StoredMember[];
+  invites: StoredInvite[];
 };
 
 export function emptyState(): StoreState {
@@ -35,5 +54,7 @@ export function emptyState(): StoreState {
     versions: [],
     versionFiles: [],
     quotas: [],
+    members: [],
+    invites: [],
   };
 }

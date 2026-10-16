@@ -91,6 +91,7 @@ export function mapProject(row: ProjectRow): Project {
     name: row.name,
     description: row.description,
     publishToken: row.publish_token ?? null,
+    accessRole: "owner",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

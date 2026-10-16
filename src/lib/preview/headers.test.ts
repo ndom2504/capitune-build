@@ -10,7 +10,9 @@ describe("preview", () => {
     expect(headers["Content-Security-Policy"]).toContain("img-src 'self'");
     expect(headers["Content-Security-Policy"]).toContain("style-src 'self'");
     expect(headers["Content-Security-Policy"]).toContain("connect-src 'none'");
+    expect(headers["Content-Security-Policy"]).toContain("worker-src 'self' blob:");
     expect(headers["Content-Security-Policy"]).toContain("frame-ancestors 'self'");
     expect(headers["X-Content-Type-Options"]).toBe("nosniff");
+    expect(headers["Cross-Origin-Resource-Policy"]).toBe("same-origin");
   });
 });
