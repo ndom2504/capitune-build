@@ -14,7 +14,9 @@ export function AppRail({
   const router = useRouter();
   const onDashboard = pathname === "/dashboard";
   const onWorkspace = pathname.startsWith("/workspace");
+  const onDemo = pathname === "/demo";
   const expanded = variant === "dashboard";
+  const studioHref = onWorkspace || onDemo ? pathname : "/dashboard#nouveau";
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -45,17 +47,23 @@ export function AppRail({
         {expanded ? (
           <>
             <RailLink href="/dashboard#projets" expanded icon={<ProjectsIcon />} label={t("myProjects")} />
-            <RailLink href="/dashboard#nouveau" expanded icon={<SparkIcon />} label={t("navCreate")} />
+            <RailLink
+              href={studioHref}
+              active={onWorkspace || onDemo}
+              expanded
+              icon={<SparkIcon />}
+              label={t("workspaceNav")}
+            />
             <RailLink href="/dashboard#exemples" expanded icon={<GridIcon />} label={t("navExamples")} />
           </>
         ) : (
           <span
-            title={t("conversation")}
+            title={t("workspaceNav")}
             className={`flex h-9 w-9 items-center justify-center rounded-xl ${
-              onWorkspace ? "bg-white text-accent" : "text-white/40"
+              onWorkspace || onDemo ? "bg-white text-accent" : "text-white/40"
             }`}
           >
-            <ChatIcon />
+            <SparkIcon />
           </span>
         )}
       </nav>
@@ -119,14 +127,6 @@ function HomeIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
       <path d="M4 11.5 12 5l8 6.5V20H4z" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function ChatIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
-      <path d="M5 6.5h14v9H9l-4 3z" strokeLinejoin="round" />
     </svg>
   );
 }

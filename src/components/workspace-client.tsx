@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppRail } from "@/components/app-rail";
 import { canEdit, canManage, type AccessRole } from "@/lib/collab/roles";
@@ -20,6 +21,7 @@ const frames = {
 
 type Device = keyof typeof frames;
 type Drawer = "none" | "files" | "publish";
+type StudioTab = "conversation" | "files" | "versions";
 
 const EXAMPLE_KEYS = ["examplePrompt1", "examplePrompt2", "examplePrompt3"] as const;
 
@@ -42,6 +44,7 @@ export function WorkspaceClient({
   const [lastPrompt, setLastPrompt] = useState("");
   const [device, setDevice] = useState<Device>("desktop");
   const [tab, setTab] = useState<"conversation" | "preview">("conversation");
+  const [studioTab, setStudioTab] = useState<StudioTab>("conversation");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewKey, setPreviewKey] = useState(0);
@@ -323,6 +326,7 @@ export function WorkspaceClient({
 
   function openFile(path: string) {
     setSelectedFile(path);
+    setStudioTab("files");
     if (path.endsWith(".html")) {
       setPreviewPage(path);
       setTab("preview");
@@ -353,8 +357,145 @@ export function WorkspaceClient({
     window.setTimeout(() => setCopied(false), 1600);
   }
 
+  const fileGroups = useMemo(() => groupProjectFiles(bundle.files.map((file) => file.path)), [bundle.files]);
+
+  const filesBody = (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      {allowEdit && !playground ? (
+        <div className="border-b px-4 py-3">
+          <label className="flex cursor-pointer justify-center rounded-full border px-4 py-2 text-sm font-medium">
+            {t("uploadImage")}
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif,image/x-icon"
+              className="hidden"
+              onChange={(event) => void uploadMedia(event.target.files)}
+            />
+          </label>
+          <p className="mt-1 text-center text-xs text-muted">{t("mediaHint")}</p>
+        </div>
+      ) : null}
+      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[minmax(140px,180px)_minmax(0,1fr)]">
+        <div className="overflow-auto border-b p-3 text-sm md:border-b-0 md:border-r">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">{t("filesTree")}</p>
+          <ul className="space-y-1">
+            {fileGroups.root.map((path) => (
+              <li key={path}>
+                <button
+                  type="button"
+                  className={`w-full truncate rounded-lg px-2 py-1 text-left ${
+                    path === selectedFile ? "bg-brand-soft font-semibold text-brand" : "text-muted"
+                  }`}
+                  onClick={() => openFile(path)}
+                >
+                  {path}
+                </button>
+              </li>
+            ))}
+            {[...fileGroups.folders.entries()].map(([folder, paths]) => (
+              <li key={folder}>
+                <p className="px-2 py-1 text-xs font-semibold text-foreground">{folder}/</p>
+                <ul className="ml-2 space-y-0.5">
+                  {paths.map((path) => (
+                    <li key={path}>
+                      <button
+                        type="button"
+                        className={`w-full truncate rounded-lg px-2 py-1 text-left ${
+                          path === selectedFile ? "bg-brand-soft font-semibold text-brand" : "text-muted"
+                        }`}
+                        onClick={() => openFile(path)}
+                      >
+                        {path.slice(folder.length + 1)}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="overflow-auto p-3">
+          {selected ? (
+            isBinaryFilePath(selected.path) ? (
+              <div className="space-y-2">
+                <img
+                  src={
+                    playground
+                      ? `data:image/png;base64,${selected.content.replace(/\s/g, "")}`
+                      : previewPageUrl(previewToken, selected.path, previewKey)
+                  }
+                  alt={selected.path}
+                  className="max-h-48 rounded-2xl border bg-slate-50 object-contain p-2"
+                />
+                <p className="text-xs text-muted">{t("binaryFile")}</p>
+              </div>
+            ) : (
+              <>
+                <p className="mb-2 font-mono text-xs text-muted">{selected.path}</p>
+                <textarea
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  readOnly={!allowEdit}
+                  className="h-64 w-full resize-y rounded-2xl border bg-slate-50 p-3 font-mono text-xs"
+                  spellCheck={false}
+                />
+                {allowEdit && !playground ? (
+                  <button
+                    type="button"
+                    disabled={!dirty || saving}
+                    onClick={() => void saveFile()}
+                    className="mt-2 w-full rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+                  >
+                    {saving ? "…" : dirty ? t("saveFile") : t("saved")}
+                  </button>
+                ) : null}
+              </>
+            )
+          ) : (
+            <p className="p-6 text-center text-sm text-muted">{t("selectFile")}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  const versionsBody = (
+    <ul className="space-y-2 overflow-auto p-4 text-sm">
+      {bundle.versions.length === 0 ? (
+        <li className="text-muted">{t("noVersions")}</li>
+      ) : (
+        bundle.versions.map((version) => (
+          <li key={version.id} className="flex items-center justify-between gap-2 rounded-2xl bg-slate-50 px-3 py-2">
+            <span className="truncate">{version.label}</span>
+            {allowEdit && !playground ? (
+              <button type="button" className="shrink-0 text-brand" onClick={() => restore(version.id)}>
+                {t("restore")}
+              </button>
+            ) : null}
+          </li>
+        ))
+      )}
+    </ul>
+  );
+
   const conversationPanel = (
     <section className="flex h-full min-h-0 flex-col border-r bg-white">
+      <div className="flex gap-1 border-b px-3 py-2">
+        {(["conversation", "files", "versions"] as const).map((item) => (
+          <button
+            key={item}
+            type="button"
+            onClick={() => setStudioTab(item)}
+            className={`rounded-full px-3 py-1 text-sm ${studioTab === item ? "bg-accent text-white" : "text-muted hover:bg-slate-50"}`}
+          >
+            {item === "conversation" ? t("conversation") : item === "files" ? t("files") : t("versions")}
+          </button>
+        ))}
+      </div>
+      {studioTab === "files" ? filesBody : null}
+      {studioTab === "versions" ? versionsBody : null}
+      {studioTab === "conversation" ? (
+      <>
       <div ref={threadRef} className="flex-1 space-y-4 overflow-y-auto p-4">
         {bundle.messages.length === 0 && !pending ? (
           <div className="space-y-4">
@@ -388,9 +529,20 @@ export function WorkspaceClient({
         {pending ? (
           <>
             <Bubble role="user">{lastPrompt}</Bubble>
-            <Bubble role="assistant">
-              <span className="text-muted">{t("generatingHint")}</span>
-            </Bubble>
+            <div className="rounded-2xl border border-indigo-100 bg-indigo-50/70 p-4 text-sm">
+              <p className="font-semibold text-brand">{t("genTitle")}</p>
+              <ul className="mt-3 space-y-1.5 text-muted">
+                <li>{t("genStep1")}</li>
+                <li>{t("genStep2")}</li>
+                <li>{t("genStep3")}</li>
+                <li className="font-medium text-brand">{t("genStep4")}</li>
+              </ul>
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white">
+                <div className="h-full w-2/3 animate-pulse rounded-full bg-brand" />
+              </div>
+              <p className="mt-2 text-xs text-muted">{t("genWait")}</p>
+            </div>
+            <p className="rounded-2xl bg-slate-50 px-3 py-2 text-xs text-muted">{t("genExpect")}</p>
           </>
         ) : null}
       </div>
@@ -432,25 +584,36 @@ export function WorkspaceClient({
         </div>
         <p className="mt-2 text-xs text-muted">{pending ? t("generating") : t("sendHint")}</p>
       </form>
+      </>
+      ) : null}
     </section>
   );
 
   const previewPanel = (
-    <section className="flex h-full min-h-0 flex-col bg-slate-100">
-      <div className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
-        {(Object.keys(frames) as Device[]).map((item) => (
-          <button
-            key={item}
-            type="button"
-            onClick={() => setDevice(item)}
-            className={`rounded-full px-3 py-1 ${device === item ? "bg-accent text-white" : "border bg-white"}`}
-          >
-            {t(item)}
-          </button>
-        ))}
-        {pending ? <span className="ml-auto text-muted">{t("generating")}</span> : null}
+    <section className="flex h-full min-h-0 flex-col bg-[#f6f8ff]">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-sm">
+        <p className="font-semibold">{t("livePreview")}</p>
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1 lg:hidden">
+            {(Object.keys(frames) as Device[]).map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setDevice(item)}
+                className={`rounded-full px-2 py-0.5 text-[11px] ${device === item ? "bg-slate-900 text-white" : "border bg-white"}`}
+              >
+                {t(item)}
+              </button>
+            ))}
+          </div>
+          {hasPreview && !playground ? (
+            <a href={previewSrc} target="_blank" rel="noreferrer" className="text-xs font-medium text-brand">
+              {t("openInTab")}
+            </a>
+          ) : null}
+        </div>
       </div>
-      <div className="relative min-h-0 flex-1 p-3">
+      <div className="relative min-h-0 flex-1 p-3 pt-0">
         <div className="flex h-full flex-col overflow-hidden rounded-2xl border bg-white shadow-sm">
           <div className="flex flex-col gap-2 border-b bg-slate-50 px-3 py-2 sm:flex-row sm:items-center">
             <div className="flex min-w-0 items-center gap-1.5">
@@ -458,7 +621,7 @@ export function WorkspaceClient({
               <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" />
               <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
               <span className="ml-2 truncate rounded-md bg-white px-2 py-0.5 text-[11px] text-muted">
-                {t("preview")} · {previewPage}
+                {previewPage}
               </span>
             </div>
             {htmlPages.length > 1 ? (
@@ -499,80 +662,77 @@ export function WorkspaceClient({
   );
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <AppRail />
+    <div className="flex h-screen overflow-hidden bg-[#f6f8ff]">
+      <AppRail variant="dashboard" />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="border-b bg-white px-3 py-2 sm:px-4">
+        <header className="border-b bg-white px-3 py-2 sm:px-5">
           <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
-              className="shrink-0 text-sm text-muted"
+              className="shrink-0 text-sm text-muted lg:hidden"
               onClick={() => router.push(playground ? "/" : "/dashboard")}
             >
-              ← {playground ? t("appName") : t("projects")}
+              ←
             </button>
-            {allowManage && !playground ? (
-            <form onSubmit={rename} className="flex min-w-0 flex-1 items-center gap-2">
-              <input
-                name="name"
-                defaultValue={bundle.project.name}
-                className="min-w-0 w-full truncate rounded-xl border-0 bg-transparent px-1 py-1 text-sm font-semibold outline-none focus:bg-slate-50"
-              />
-              <button type="submit" className="hidden shrink-0 rounded-full border px-3 py-1 text-xs font-medium sm:inline-flex">
-                {t("rename")}
-              </button>
-            </form>
-            ) : (
-              <p className="min-w-0 flex-1 truncate px-1 py-1 text-sm font-semibold">{bundle.project.name}</p>
-            )}
-            <div className="hidden shrink-0 items-center gap-2 lg:flex">
-              <button
-                type="button"
-                onClick={() => setDrawer(drawer === "files" ? "none" : "files")}
-                className="rounded-full border px-3 py-1.5 text-sm"
-              >
-                {t("files")}
-              </button>
-              <button
-                type="button"
-                onClick={() => setDrawer(drawer === "publish" ? "none" : "publish")}
-                className="rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-white"
-              >
-                {publicPath ? t("publishLive") : t("publish")}
-              </button>
-              {demoMode ? (
-                <span className="rounded-full bg-brand-soft px-3 py-1 text-xs font-medium text-brand">{t("demoMode")}</span>
-              ) : null}
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 items-center gap-2">
+                {allowManage && !playground ? (
+                  <form onSubmit={rename} className="flex min-w-0 flex-1 items-center gap-2">
+                    <input
+                      name="name"
+                      defaultValue={bundle.project.name}
+                      className="min-w-0 w-full truncate rounded-xl border-0 bg-transparent px-1 py-0.5 text-base font-bold outline-none focus:bg-slate-50"
+                    />
+                  </form>
+                ) : (
+                  <p className="min-w-0 truncate text-base font-bold">{bundle.project.name}</p>
+                )}
+                {pending ? (
+                  <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                    {t("inProgress")}
+                  </span>
+                ) : publicPath ? (
+                  <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                    {t("publishLive")}
+                  </span>
+                ) : null}
+              </div>
+              <p className="truncate px-1 text-[11px] text-muted">
+                {t("createdLabel")} {formatShortDate(bundle.project.createdAt)} · {formatUpdated(bundle.project.updatedAt)}
+              </p>
             </div>
-          </div>
-          <div className="mt-2 flex items-center gap-2 lg:hidden">
-            {demoMode ? (
-              <span className="shrink-0 rounded-full bg-brand-soft px-2 py-2 text-[11px] font-medium text-brand">
-                {t("demoMode")}
-              </span>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => setDrawer(drawer === "files" ? "none" : "files")}
-              className="flex-1 rounded-full border px-3 py-2 text-sm"
-            >
-              {t("files")}
-            </button>
+            <div className="hidden items-center gap-1 lg:flex">
+              {(Object.keys(frames) as Device[]).map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setDevice(item)}
+                  className={`rounded-full px-3 py-1 text-xs ${device === item ? "bg-slate-900 text-white" : "border bg-white"}`}
+                >
+                  {t(item)}
+                </button>
+              ))}
+            </div>
             <button
               type="button"
               onClick={() => setDrawer(drawer === "publish" ? "none" : "publish")}
-              className="flex-1 rounded-full bg-accent px-3 py-2 text-sm font-semibold text-white"
+              className="rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-white"
             >
               {publicPath ? t("publishLive") : t("publish")}
             </button>
+            {demoMode ? (
+              <span className="hidden rounded-full bg-brand-soft px-3 py-1 text-xs font-medium text-brand sm:inline">
+                {t("demoMode")}
+              </span>
+            ) : null}
           </div>
         </header>
         {playground ? (
           <p className="border-b bg-brand-soft px-4 py-2 text-xs sm:text-sm">
             {t("playgroundHint")}{" "}
-            <a href="/signup" className="font-semibold text-brand">
+            <Link href="/signup" className="font-semibold text-brand">
               {t("saveToAccount")}
-            </a>
+            </Link>
           </p>
         ) : demoMode ? (
           <p className="border-b bg-brand-soft px-4 py-2 text-xs sm:text-sm">{t("demoModeHint")}</p>
@@ -594,7 +754,7 @@ export function WorkspaceClient({
         </div>
 
         <div className="relative min-h-0 flex-1">
-          <div className="hidden h-full lg:grid lg:grid-cols-[minmax(280px,380px)_minmax(0,1fr)]">
+          <div className="hidden h-full lg:grid lg:grid-cols-[minmax(320px,440px)_minmax(0,1fr)]">
             {conversationPanel}
             {previewPanel}
           </div>
@@ -613,9 +773,9 @@ export function WorkspaceClient({
               {drawer === "publish" ? (
                 <div className="space-y-3 p-4 text-sm">
                   {playground ? (
-                    <a href="/signup" className="flex justify-center rounded-full bg-accent px-4 py-2.5 font-semibold text-white">
+                    <Link href="/signup" className="flex justify-center rounded-full bg-accent px-4 py-2.5 font-semibold text-white">
                       {t("saveToAccount")}
-                    </a>
+                    </Link>
                   ) : (
                     <>
                   <p className="text-muted">{t("publishHint")}</p>
@@ -855,6 +1015,37 @@ export function WorkspaceClient({
       </div>
     </div>
   );
+}
+
+function groupProjectFiles(paths: string[]) {
+  const root: string[] = [];
+  const folders = new Map<string, string[]>();
+  for (const path of paths) {
+    const slash = path.indexOf("/");
+    if (slash === -1) {
+      root.push(path);
+      continue;
+    }
+    const folder = path.slice(0, slash);
+    const list = folders.get(folder) ?? [];
+    list.push(path);
+    folders.set(folder, list);
+  }
+  return { root, folders };
+}
+
+function formatShortDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso.slice(0, 10);
+  return new Intl.DateTimeFormat("fr", { day: "numeric", month: "short", year: "numeric" }).format(date);
+}
+
+function formatUpdated(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const hours = Math.max(0, Math.round(diff / 3_600_000));
+  if (hours < 1) return t("editedJustNow");
+  if (hours < 24) return t("editedHours").replace("{n}", String(hours));
+  return t("editedDays").replace("{n}", String(Math.max(1, Math.round(hours / 24))));
 }
 
 function Bubble({
